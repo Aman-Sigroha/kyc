@@ -1,0 +1,111 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+logs/
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# ML Models (too large for git)
+models/*.onnx
+models/*.pth
+data/
+*.h5
+*.pb
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Node.js
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.pnpm-debug.log*
+pnpm-lock.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+# Railway
+.railway/
+
+# Build artifacts
+*.pyc
+*.pyo
+*.mo
+*.so
+*.dll
+*.dylib
+
+# Images (optional - uncomment if you don't want to track test images)
+# *.jpg
+# *.jpeg
+# *.png
+# *.gif
+
+# Mac OS system files
+__MACOSX/
+**/__MACOSX/
+
+# Windows batch files (local scripts only)
+*.bat
+
+# Test and demo files
+test_api_direct.html
+tests/outputs/
+
+# Archive files
+*.zip
+
+# Documentation that's auto-generated or local-only
+# (Remove this section if you want to track these files)
+# QUICK_START.bat is already covered by *.bat above

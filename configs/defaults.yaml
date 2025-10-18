@@ -1,0 +1,79 @@
+# defaults.yaml
+# Default configuration for KYC verification service
+# Optimized for European/US ID cards
+
+project:
+  name: "kyc-verification-service"
+  version: "1.0.0"
+  description: "KYC verification with face matching and OCR"
+  log_level: "INFO"
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: false  # Set true for development
+
+paths:
+  models_dir: "models/"
+  logs_dir: "logs/"
+  temp_dir: "temp/"
+
+models:
+  # YuNet Face Detection
+  face_detection:
+    name: "yunet"
+    type: "onnx"
+    url: "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
+    local_file: "yunet.onnx"
+    conf_threshold: 0.6
+    nms_threshold: 0.3
+  
+  # InsightFace Recognition
+  face_recognition:
+    name: "insightface"
+    model_name: "buffalo_l"  # buffalo_l (accurate) or buffalo_s (faster)
+    similarity_threshold: 0.4  # 0.3=lenient, 0.4=balanced, 0.5=strict
+  
+  # EasyOCR Text Extraction
+  ocr:
+    name: "easyocr"
+    languages: ["en", "de", "es", "pt"]  # English, German, Spanish, Portuguese
+    confidence_threshold: 0.3
+    gpu: false  # Set true if GPU available
+
+# File upload settings
+upload:
+  max_size_mb: 10
+  allowed_extensions: ["jpg", "jpeg", "png", "pdf"]
+  image_max_dimension: 4096  # Max width/height in pixels
+
+# API settings
+api:
+  prefix: "/api/v1"
+  cors_enabled: true
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+  rate_limit_enabled: false  # Enable in production
+  rate_limit_per_minute: 60
+
+# Storage settings
+storage:
+  type: "local"  # local or s3
+  local_temp_dir: "temp/"
+  s3_bucket: null  # Set via env variable
+  cleanup_temp_files: true
+  temp_file_ttl_hours: 24
+
+# Monitoring (optional)
+monitoring:
+  enabled: false
+  prometheus_port: 9090
+  health_check_path: "/health"
+
+# Processing settings
+processing:
+  async_enabled: true  # Use background tasks for heavy operations
+  max_concurrent_requests: 10
+  timeout_seconds: 30

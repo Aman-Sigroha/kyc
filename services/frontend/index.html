@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>My Accounting Openeing Flow</title>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"
+    />
+    <script crossorigin src="/ballerine-sdk.umd.js"></script>
+  </head>
+  <body>
+    <div id="kyc-host"></div>
+    <script>
+      // Dynamic backend URL detection for Railway deployment
+      const isProduction = window.location.hostname.includes('railway.app');
+      const backendUrl = isProduction 
+        ? 'https://YOUR-PROXY-URL.railway.app'  // TODO: Update after deploying proxy service
+        : 'http://localhost:3001';
+
+      const ballerineInitConfig = {
+        endUserInfo: {
+          id: 'user-' + Date.now(),
+          firstName: '',
+          lastName: '',
+        },
+        backendConfig: {
+          baseUrl: backendUrl,
+          endpoints: {
+            verify: '/v2/enduser/verify',
+            status: '/v2/enduser/verify/status',
+            submitPartial: '/v2/enduser/verify/partial',
+            submitFinal: '/v2/enduser/verify/final',
+          },
+        },
+        uiConfig: {
+          general: {
+            colors: {
+              primary: '#1F9F31',
+            },
+            fonts: {
+              name: 'Inter',
+              link: 'https://fonts.googleapis.com/css2?family=Inter:wght@500',
+              weight: [500, 700],
+            },
+          },
+          flows: {
+            'my-kyc-flow': {
+              steps: [
+                {
+                  name: 'welcome',
+                  id: 'welcome',
+                },
+                {
+                  name: 'document-selection',
+                  id: 'document-selection',
+                  documentOptions: ['id_card', 'drivers_license', 'passport'],
+                },
+                {
+                  name: 'document-photo',
+                  id: 'document-photo',
+                },
+                {
+                  name: 'check-document',
+                  id: 'check-document',
+                },
+                {
+                  name: 'document-photo-back-start',
+                  id: 'document-photo-back-start',
+                },
+                {
+                  name: 'document-photo-back',
+                  id: 'document-photo-back',
+                },
+                {
+                  name: 'check-document-photo-back',
+                  id: 'check-document-photo-back',
+                },
+                {
+                  name: 'selfie-start',
+                  id: 'selfie-start',
+                },
+                {
+                  name: 'selfie',
+                  id: 'selfie',
+                },
+                {
+                  name: 'check-selfie',
+                  id: 'check-selfie',
+                },
+                {
+                  name: 'loading',
+                  id: 'loading',
+                },
+                {
+                  name: 'final',
+                  id: 'final',
+                },
+              ],
+            },
+            'my-kyb-flow': {
+              steps: [
+                {
+                  name: 'welcome',
+                  id: 'welcome',
+                },
+                {
+                  name: 'document-start',
+                  id: 'document-start',
+                  type: 'business_registration',
+                },
+                {
+                  name: 'document-photo',
+                  id: 'document-photo',
+                  type: 'business_registration',
+                },
+                {
+                  name: 'document-start',
+                  id: 'document-start',
+                  type: 'proof_of_business_tax_id',
+                },
+                {
+                  name: 'document-photo',
+                  id: 'document-photo',
+                  type: 'proof_of_business_tax_id',
+                },
+                {
+                  name: 'document-start',
+                  id: 'document-start',
+                  type: 'bank_statement',
+                },
+                {
+                  name: 'document-photo',
+                  id: 'document-photo',
+                  type: 'bank_statement',
+                },
+                {
+                  name: 'document-selection',
+                  id: 'document-selection',
+                  documentOptions: ['id_card', 'drivers_license', 'passport'],
+                },
+                {
+                  name: 'document-photo',
+                  id: 'document-photo',
+                },
+                {
+                  name: 'document-photo-back-start',
+                  id: 'document-photo-back-start',
+                },
+                {
+                  name: 'document-photo-back',
+                  id: 'document-photo-back',
+                },
+                {
+                  name: 'loading',
+                  id: 'loading',
+                },
+                {
+                  name: 'final',
+                  id: 'final',
+                },
+              ],
+            },
+          },
+        },
+      };
+      BallerineSDK.flows.init(ballerineInitConfig).then(() => {
+        BallerineSDK.flows.openModal('my-kyc-flow', {});
+      });
+    </script>
+  </body>
+</html>
