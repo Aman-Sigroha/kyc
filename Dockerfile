@@ -1,16 +1,13 @@
-# Use official Python 3.11 slim image (better wheel compatibility than 3.12)
-FROM python:3.11-slim
+# Use official Python 3.11 full image (has better binary compatibility for ML libs)
+FROM python:3.11
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for OpenCV and building C extensions
+# Install system dependencies for OpenCV
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
-    gcc \
-    g++ \
-    make \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
