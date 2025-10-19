@@ -3,3 +3,6 @@
 [phases.setup]
 aptPkgs = ["libgl1", "libglib2.0-0", "gcc", "g++", "make"]
 
+[start]
+cmd = "sh -c 'export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH && uvicorn api.api:app --host 0.0.0.0 --port $PORT'"
+
