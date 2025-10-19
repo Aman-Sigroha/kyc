@@ -1,3 +1,6 @@
+# Use PyTorch CPU-only repository (saves ~3GB by avoiding CUDA)
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
@@ -6,9 +9,17 @@ pydantic-settings==2.1.0
 Pillow==10.1.0
 numpy==1.26.2
 opencv-python-headless==4.8.1.78
+
+# PyTorch CPU-only (much smaller than CUDA version)
+torch==2.1.0+cpu
+torchvision==0.16.0+cpu
+
+# ML packages
 insightface==0.7.3
 onnxruntime==1.16.3
 easyocr==1.7.1
+
+# Config & utilities
 PyYAML==6.0.1
 python-dotenv==1.0.0
 aiofiles==23.2.1
