@@ -3,6 +3,10 @@
 [phases.setup]
 aptPkgs = ["libgl1", "libglib2.0-0", "gcc", "g++", "make"]
 
+[phases.install]
+# Don't use venv in Docker container - install directly to system Python
+cmds = ["pip install --no-cache-dir -r requirements.txt"]
+
 [start]
 cmd = "sh -c 'export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH && uvicorn api.api:app --host 0.0.0.0 --port $PORT'"
 
