@@ -1,8 +1,8 @@
-[providers]
-python = "3.11"
-
 [phases.setup]
-nixPkgs = ["...", "libGL", "glib", "libxcrypt-legacy"]
+nixPkgs = ["python311", "python311Packages.pip", "python311Packages.virtualenv", "libGL", "glib", "libxcrypt-legacy"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
 
 [start]
 cmd = "uvicorn api.api:app --host 0.0.0.0 --port $PORT"
