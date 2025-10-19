@@ -1,12 +1,13 @@
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "python311Packages.virtualenv", "gcc", "gnumake", "libGL", "glib", "libxcrypt-legacy"]
+# Install system dependencies with apt (available at runtime)
+aptPkgs = ["libgl1", "libglib2.0-0", "gcc", "g++", "make"]
 
 [phases.install]
 cmds = [
-    "python -m venv /opt/venv",
-    ". /opt/venv/bin/activate && pip install -r requirements.txt"
+    "pip install --upgrade pip",
+    "pip install -r requirements.txt"
 ]
 
 [start]
-cmd = ". /opt/venv/bin/activate && uvicorn api.api:app --host 0.0.0.0 --port $PORT"
+cmd = "uvicorn api.api:app --host 0.0.0.0 --port $PORT"
 
