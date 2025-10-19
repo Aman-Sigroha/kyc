@@ -1,13 +1,5 @@
+# Let Nixpacks auto-detect Python from requirements.txt
+# Only specify additional system libraries needed for OpenCV at runtime
 [phases.setup]
-# Install system dependencies with apt (available at runtime)
 aptPkgs = ["libgl1", "libglib2.0-0", "gcc", "g++", "make"]
-
-[phases.install]
-cmds = [
-    "pip install --upgrade pip",
-    "pip install -r requirements.txt"
-]
-
-[start]
-cmd = "uvicorn api.api:app --host 0.0.0.0 --port $PORT"
 
