@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     patchelf \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -25,6 +26,10 @@ RUN find /usr/local/lib/python3.9/site-packages/onnxruntime -name "*.so" -exec p
 
 # Copy application code
 COPY . .
+
+# Download YuNet face detection model
+RUN mkdir -p models && \
+    wget -O models/yunet.onnx https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
 
 # Expose port (Railway will set $PORT)
 EXPOSE 8000
