@@ -169,8 +169,8 @@ Open `https://your-frontend.railway.app` in browser
 ```
 
 ### `services/frontend/railway.json`
-```json
-{
+   ```json
+   {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS"
@@ -180,8 +180,8 @@ Open `https://your-frontend.railway.app` in browser
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
-}
-```
+   }
+   ```
 
 ---
 
