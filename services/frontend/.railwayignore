@@ -1,0 +1,4 @@
+# Ignore files outside this service directory
+../../*
+!../../services/frontend/
+
