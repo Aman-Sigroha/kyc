@@ -4,13 +4,13 @@ FROM python:3.9-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies + execstack for patching binaries
+# Install system dependencies + patchelf for patching binaries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     gcc \
     g++ \
-    execstack \
+    patchelf \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -19,9 +19,9 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# CRITICAL FIX: Remove execstack flag from onnxruntime binaries
-# Railway blocks executable stacks, but we can clear the flag post-install
-RUN find /usr/local/lib/python3.9/site-packages/onnxruntime -name "*.so" -exec execstack -c {} \; 2>/dev/null || true
+# CRITICAL FIX: Clear executable stack flag from onnxruntime binaries
+# Railway blocks executable stacks, patchelf clears the PT_GNU_STACK flag
+RUN find /usr/local/lib/python3.9/site-packages/onnxruntime -name "*.so" -exec patchelf --clear-execstack {} \; 2>/dev/null || true
 
 # Copy application code
 COPY . .
