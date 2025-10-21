@@ -62,6 +62,15 @@ async def lifespan(app: FastAPI):
     try:
         # ✅ LAZY IMPORT: Import ML libraries here, not at module level
         logger.info("Importing ML libraries...")
+        
+        # Try importing onnxruntime directly to see the real error
+        try:
+            import onnxruntime as ort
+            logger.info(f"✓ onnxruntime imported successfully (version: {ort.__version__})")
+        except Exception as ort_error:
+            logger.error(f"❌ onnxruntime import failed: {type(ort_error).__name__}: {ort_error}")
+            raise ImportError(f"onnxruntime failed: {ort_error}")
+        
         from app.services.face_detector_id import get_face_detector
         from app.services.face_matcher import get_face_matcher
         from app.services.ocr_extractor import get_ocr_extractor
