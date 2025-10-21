@@ -15,7 +15,7 @@
       // Dynamic backend URL detection for Railway deployment
       const isProduction = window.location.hostname.includes('railway.app');
       const backendUrl = isProduction 
-        ? 'https://YOUR-PROXY-URL.railway.app'  // TODO: Update after deploying proxy service
+        ? 'https://kyc-proxy-production.up.railway.app'  // ✅ Proxy deployed and configured
         : 'http://localhost:3001';
 
       const ballerineInitConfig = {
