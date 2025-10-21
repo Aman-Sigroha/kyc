@@ -1,6 +1,6 @@
 #!/bin/sh
-# Use PORT environment variable from Railway (defaults to 3000 if not set)
-PORT=${PORT:-3000}
+# Use PORT environment variable from Railway (defaults to 8080 if not set)
+PORT=${PORT:-8080}
 
 echo "====================================="
 echo "🚀 Starting nginx on PORT: $PORT"
