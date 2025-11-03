@@ -82,25 +82,30 @@
                         fullResponse: responseData // Log full response for debugging
                     });
                     
-                    // Check verification status - check both fields
-                    const verificationStatus = (responseData.status || responseData.verification_status || '').toLowerCase();
-                    const verificationMessage = (responseData.message || '').toLowerCase();
-                    const isApproved = verificationStatus === 'approved' || 
-                                     verificationStatus === 'success' || 
-                                     verificationStatus === 'verified';
-                    const isPending = verificationStatus === 'pending';
-                    const isRejected = verificationStatus === 'rejected' || 
-                                      verificationStatus === 'failed' || 
-                                      verificationStatus === 'error';
-                    
-                    // Check if pending is due to liveness requirement (vs other reasons like low OCR)
-                    const isPendingForLiveness = isPending && verificationMessage.includes('liveness check required');
-                    
-                    // Store verification status in sessionStorage so DOM observers can check it
-                    if (isApproved || isPending || isRejected) {
-                        sessionStorage.setItem('last_verification_status', verificationStatus);
-                        sessionStorage.setItem('last_verification_message', verificationMessage);
-                    }
+                       // Check verification status - check both fields
+                       const verificationStatus = (responseData.status || responseData.verification_status || '').toLowerCase();
+                       const verificationMessage = (responseData.message || ''); // Keep original case for display
+                       const isApproved = verificationStatus === 'approved' || 
+                                        verificationStatus === 'success' || 
+                                        verificationStatus === 'verified';
+                       const isPending = verificationStatus === 'pending';
+                       const isRejected = verificationStatus === 'rejected' || 
+                                         verificationStatus === 'failed' || 
+                                         verificationStatus === 'error';
+                       
+                       // Check if pending is due to liveness requirement (vs other reasons like low OCR)
+                       const isPendingForLiveness = isPending && verificationMessage.toLowerCase().includes('liveness check required');
+                       
+                       // Store verification status in sessionStorage so DOM observers can check it
+                       // CRITICAL: Always store status and message for text replacement
+                       sessionStorage.setItem('last_verification_status', verificationStatus);
+                       sessionStorage.setItem('last_verification_message', verificationMessage || '');
+                       
+                       console.log('💾 Stored verification status:', {
+                           status: verificationStatus,
+                           message: verificationMessage,
+                           isRejected: isRejected
+                       });
                     
                     console.log('🔍 Status check:', {
                         verificationStatus,
@@ -207,11 +212,16 @@
                             // Check if pending is due to liveness requirement (vs other reasons like low OCR)
                             const isPendingForLiveness = isPending && verificationMessage.includes('liveness check required');
                             
-                            // Store status for DOM observers
-                            if (isApproved || isPending || isRejected) {
-                                sessionStorage.setItem('last_verification_status', verificationStatus);
-                                sessionStorage.setItem('last_verification_message', verificationMessage);
-                            }
+                               // Store status for DOM observers
+                               // CRITICAL: Always store for text replacement
+                               sessionStorage.setItem('last_verification_status', verificationStatus);
+                               sessionStorage.setItem('last_verification_message', data.message || '');
+                               
+                               console.log('💾 XHR: Stored verification status:', {
+                                   status: verificationStatus,
+                                   message: data.message,
+                                   isRejected: isRejected
+                               });
                             
                             // CRITICAL: Only redirect if:
                             // 1. Approved (and liveness not done), OR
@@ -534,10 +544,16 @@
                                        modalText.includes('failed') || 
                                        modalText.includes('rejected') ||
                                        modalText.includes('kyc failed') ||
-                                       modalText.includes('unsuccessful');
+                                       modalText.includes('unsuccessful') ||
+                                       modalText.includes('face didn\'t match');
                     
-                    if (!hasErrorText && !finalStep.dataset.textReplaced) {
-                        console.log('🔧 POLLING FIX: Verification rejected - replacing success text...');
+                    if (!hasErrorText) {
+                        // Don't check dataset flag - try to replace every time until it works
+                        console.log('🔧 POLLING FIX: Verification rejected - replacing success text...', {
+                            lastStatus,
+                            lastMessage,
+                            modalText: modalText.substring(0, 100)
+                        });
                         
                         // Get failure messages
                         let failureTitle = 'KYC Failed';
@@ -554,38 +570,94 @@
                             }
                         }
                         
-                        // Replace all text elements
+                        // Replace ALL text elements aggressively
                         const allElements = finalStep.querySelectorAll('*');
+                        let replacedCount = 0;
+                        
                         allElements.forEach(el => {
-                            if (el.dataset.fixedText) return;
+                            if (el.dataset.fixedText === 'true') return; // Skip already fixed
                             
-                            const text = el.textContent.trim().toLowerCase();
-                            if (text.includes('verified') || text.includes('success') || text.includes('approved')) {
+                            const text = (el.textContent || el.innerText || '').trim();
+                            const lowerText = text.toLowerCase();
+                            
+                            // Check if contains success words
+                            if (lowerText.includes('verified') || 
+                                lowerText.includes('success') || 
+                                lowerText.includes('approved') ||
+                                lowerText.includes('identity verified') ||
+                                lowerText.includes('successfully verified') ||
+                                lowerText === 'success') {
+                                
+                                // Replace based on element type
                                 if (el.tagName.match(/^H[1-6]$/)) {
                                     el.textContent = failureTitle;
                                     el.style.color = '#c62828';
                                     el.style.fontWeight = 'bold';
                                     el.dataset.fixedText = 'true';
+                                    replacedCount++;
+                                    console.log(`✅ Replaced H tag: "${text}" → "${failureTitle}"`);
                                 } else if (el.children.length === 0 && (el.tagName === 'P' || el.tagName === 'SPAN' || el.tagName === 'DIV')) {
+                                    // Only replace leaf nodes to avoid nested issues
                                     el.textContent = failureMessage;
                                     el.style.color = '#c62828';
                                     el.style.fontWeight = 'bold';
                                     el.dataset.fixedText = 'true';
+                                    replacedCount++;
+                                    console.log(`✅ Replaced text: "${text.substring(0, 50)}" → "${failureMessage}"`);
                                 }
                             }
                         });
                         
+                        // Also replace text nodes directly (more aggressive)
+                        const walker = document.createTreeWalker(
+                            finalStep,
+                            NodeFilter.SHOW_TEXT,
+                            null,
+                            false
+                        );
+                        
+                        let node;
+                        while (node = walker.nextNode()) {
+                            const text = node.textContent.trim();
+                            if (text.toLowerCase().includes('verified') || 
+                                text.toLowerCase().includes('success') || 
+                                text.toLowerCase().includes('approved')) {
+                                
+                                // Check parent element
+                                const parent = node.parentElement;
+                                if (parent && !parent.dataset.fixedText) {
+                                    if (parent.tagName.match(/^H[1-6]$/)) {
+                                        parent.textContent = failureTitle;
+                                        parent.style.color = '#c62828';
+                                        parent.style.fontWeight = 'bold';
+                                        parent.dataset.fixedText = 'true';
+                                        replacedCount++;
+                                    } else if (parent.tagName === 'P' || parent.tagName === 'SPAN') {
+                                        parent.textContent = failureMessage;
+                                        parent.style.color = '#c62828';
+                                        parent.style.fontWeight = 'bold';
+                                        parent.dataset.fixedText = 'true';
+                                        replacedCount++;
+                                    }
+                                }
+                            }
+                        }
+                        
                         // Replace buttons
-                        finalStep.querySelectorAll('button, [role="button"]').forEach(btn => {
+                        finalStep.querySelectorAll('button, [role="button"], a[class*="button"]').forEach(btn => {
                             const btnText = btn.textContent.trim().toLowerCase();
                             if (btnText === 'next' || btnText === 'continue') {
                                 btn.textContent = 'Try Again';
+                                replacedCount++;
+                                console.log('✅ Changed button text to "Try Again"');
                             }
                         });
                         
-                        // Mark as replaced to avoid repeated processing
-                        finalStep.dataset.textReplaced = 'true';
-                        console.log('✅ POLLING: Text replacement applied');
+                        if (replacedCount > 0) {
+                            console.log(`✅ POLLING: Text replacement complete - ${replacedCount} elements changed`);
+                        } else {
+                            console.warn('⚠️ POLLING: No elements replaced - may need different selectors');
+                        }
                     }
                 }
                 
