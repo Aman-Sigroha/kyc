@@ -352,58 +352,101 @@
                     const wasRejectedOrError = lastStatus === 'rejected' || lastStatus === 'failed' || lastStatus === 'error';
                     
                     // FIX: If verification was rejected but SDK shows success screen, change the text
-                    if (finalStep && wasRejectedOrError && hasSuccessText && !hasErrorText) {
-                        console.log('🔧 FIX: Verification rejected but SDK shows success screen - changing text to failure message');
+                    if (finalStep && wasRejectedOrError) {
+                        // Check if we need to replace success text
+                        const needsReplacement = hasSuccessText && !hasErrorText;
                         
-                        // Find all text elements in the final step
-                        const textElements = finalStep.querySelectorAll('h1, h2, h3, p, span, div');
-                        const lastMessageFromStorage = sessionStorage.getItem('last_verification_message') || '';
-                        
-                        // Default failure messages
-                        let failureTitle = 'KYC Failed';
-                        let failureMessage = 'Face didn\'t match. Please try again.';
-                        
-                        // Use message from storage if available
-                        if (lastMessageFromStorage) {
-                            if (lastMessageFromStorage.toLowerCase().includes('face')) {
-                                failureTitle = 'KYC Failed';
-                                failureMessage = 'Face didn\'t match. Please try again.';
-                            } else if (lastMessageFromStorage.toLowerCase().includes('unsuccessful')) {
-                                failureTitle = 'Unsuccessful';
-                                failureMessage = lastMessageFromStorage;
-                            } else {
-                                failureMessage = lastMessageFromStorage;
-                            }
-                        }
-                        
-                        // Replace success text with failure text
-                        textElements.forEach(el => {
-                            const text = el.textContent || el.innerText || '';
-                            if (text.includes('verified') || text.includes('success') || text.includes('approved') || text.includes('Identity verified')) {
-                                // Replace with failure message
-                                if (el.tagName === 'H1' || el.tagName === 'H2') {
-                                    el.textContent = failureTitle;
+                        if (needsReplacement) {
+                            console.log('🔧 FIX: Verification rejected but SDK shows success screen - changing text to failure message');
+                            
+                            // Get message from storage
+                            const lastMessageFromStorage = sessionStorage.getItem('last_verification_message') || '';
+                            
+                            // Determine failure messages
+                            let failureTitle = 'KYC Failed';
+                            let failureMessage = 'Face didn\'t match. Please try again.';
+                            
+                            if (lastMessageFromStorage) {
+                                if (lastMessageFromStorage.toLowerCase().includes('face') || lastMessageFromStorage.toLowerCase().includes('match')) {
+                                    failureTitle = 'KYC Failed';
+                                    failureMessage = 'Face didn\'t match. Please try again.';
+                                } else if (lastMessageFromStorage.toLowerCase().includes('unsuccessful')) {
+                                    failureTitle = 'Unsuccessful';
+                                    // Extract the main message
+                                    const msg = lastMessageFromStorage.replace(/^Unsuccessful\s*-?\s*/i, '').trim();
+                                    failureMessage = msg || 'Please try again.';
                                 } else {
-                                    el.textContent = failureMessage;
+                                    failureTitle = 'KYC Failed';
+                                    failureMessage = lastMessageFromStorage || 'Please try again.';
                                 }
-                                
-                                // Add error styling
-                                el.style.color = '#c62828';
-                                el.style.fontWeight = 'bold';
-                                
-                                console.log(`Changed text: "${text}" → "${el.textContent}"`);
                             }
-                        });
-                        
-                        // Also try to change icon/visual indicators
-                        const icons = finalStep.querySelectorAll('[class*="success"], [class*="check"], [class*="checkmark"]');
-                        icons.forEach(icon => {
-                            if (icon.textContent === '✓' || icon.textContent === '✔' || icon.textContent.includes('check')) {
-                                icon.textContent = '✗';
-                                icon.style.color = '#c62828';
-                                icon.style.background = '#ffebee';
-                            }
-                        });
+                            
+                            // Find ALL text elements more aggressively
+                            const allElements = finalStep.querySelectorAll('*');
+                            let replacedCount = 0;
+                            
+                            allElements.forEach(el => {
+                                // Skip if already processed or empty
+                                if (el.dataset.fixedText || !el.textContent) return;
+                                
+                                const text = el.textContent.trim();
+                                const lowerText = text.toLowerCase();
+                                
+                                // Check if this element contains success text
+                                if (lowerText.includes('verified') || 
+                                    lowerText.includes('success') || 
+                                    lowerText.includes('approved') ||
+                                    lowerText.includes('identity verified') ||
+                                    lowerText.includes('successfully verified')) {
+                                    
+                                    // Mark as processed
+                                    el.dataset.fixedText = 'true';
+                                    
+                                    // Replace text based on element type
+                                    if (el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'H3') {
+                                        el.textContent = failureTitle;
+                                        replacedCount++;
+                                    } else if (el.tagName === 'P' || el.tagName === 'SPAN' || el.tagName === 'DIV') {
+                                        // Only replace if it's the main message, not nested elements
+                                        const parentTag = el.parentElement?.tagName;
+                                        if (parentTag === 'P' || parentTag === 'DIV' || !el.children.length) {
+                                            el.textContent = failureMessage;
+                                            replacedCount++;
+                                        }
+                                    }
+                                    
+                                    // Apply error styling
+                                    el.style.color = '#c62828';
+                                    el.style.fontWeight = 'bold';
+                                    
+                                    console.log(`✅ Changed text: "${text.substring(0, 50)}..." → "${el.textContent}"`);
+                                }
+                            });
+                            
+                            // Also change icons
+                            const icons = finalStep.querySelectorAll('[class*="success"], [class*="check"], [class*="checkmark"], svg');
+                            icons.forEach(icon => {
+                                const iconText = icon.textContent || '';
+                                if (iconText.includes('✓') || iconText.includes('✔') || iconText.includes('check')) {
+                                    icon.textContent = '✗';
+                                    icon.style.color = '#c62828';
+                                    icon.style.background = '#ffebee';
+                                    replacedCount++;
+                                }
+                            });
+                            
+                            // Change button text if it says "Next" or "Continue"
+                            const buttons = finalStep.querySelectorAll('button, [role="button"]');
+                            buttons.forEach(btn => {
+                                const btnText = btn.textContent.trim().toLowerCase();
+                                if (btnText === 'next' || btnText === 'continue') {
+                                    btn.textContent = 'Try Again';
+                                    replacedCount++;
+                                }
+                            });
+                            
+                            console.log(`✅ Text replacement complete: ${replacedCount} elements changed`);
+                        }
                         
                         // Prevent redirect to liveness for rejected verifications
                         if (!hasRedirected && !sessionStorage.getItem('liveness_completed')) {
@@ -458,6 +501,7 @@
         }
         
         // Monitor DOM for step transitions - more aggressive detection
+        // Also includes text replacement polling as backup
         const pollInterval = setInterval(() => {
             if (hasRedirected || sessionStorage.getItem('liveness_completed')) {
                 clearInterval(pollInterval);
@@ -476,7 +520,74 @@
                 const hasSuccessText = modalText.includes('verified') || 
                                       modalText.includes('success') || 
                                       modalText.includes('approved') ||
-                                      modalText.includes('Identity verified');
+                                      modalText.includes('Identity verified') ||
+                                      modalText.includes('successfully verified');
+                
+                // Check verification status
+                const lastStatus = sessionStorage.getItem('last_verification_status') || '';
+                const lastMessage = sessionStorage.getItem('last_verification_message') || '';
+                const wasRejectedOrError = lastStatus === 'rejected' || lastStatus === 'failed' || lastStatus === 'error';
+                
+                // POLLING FIX: Replace success text if verification was rejected (backup to MutationObserver)
+                if (finalStep && wasRejectedOrError && hasSuccessText) {
+                    const hasErrorText = modalText.includes('error') || 
+                                       modalText.includes('failed') || 
+                                       modalText.includes('rejected') ||
+                                       modalText.includes('kyc failed') ||
+                                       modalText.includes('unsuccessful');
+                    
+                    if (!hasErrorText && !finalStep.dataset.textReplaced) {
+                        console.log('🔧 POLLING FIX: Verification rejected - replacing success text...');
+                        
+                        // Get failure messages
+                        let failureTitle = 'KYC Failed';
+                        let failureMessage = 'Face didn\'t match. Please try again.';
+                        
+                        if (lastMessage) {
+                            if (lastMessage.toLowerCase().includes('face') || lastMessage.toLowerCase().includes('match')) {
+                                failureTitle = 'KYC Failed';
+                                failureMessage = 'Face didn\'t match. Please try again.';
+                            } else if (lastMessage.toLowerCase().includes('unsuccessful')) {
+                                failureTitle = 'Unsuccessful';
+                                const msg = lastMessage.replace(/^Unsuccessful\s*-?\s*/i, '').trim();
+                                failureMessage = msg || 'Please try again.';
+                            }
+                        }
+                        
+                        // Replace all text elements
+                        const allElements = finalStep.querySelectorAll('*');
+                        allElements.forEach(el => {
+                            if (el.dataset.fixedText) return;
+                            
+                            const text = el.textContent.trim().toLowerCase();
+                            if (text.includes('verified') || text.includes('success') || text.includes('approved')) {
+                                if (el.tagName.match(/^H[1-6]$/)) {
+                                    el.textContent = failureTitle;
+                                    el.style.color = '#c62828';
+                                    el.style.fontWeight = 'bold';
+                                    el.dataset.fixedText = 'true';
+                                } else if (el.children.length === 0 && (el.tagName === 'P' || el.tagName === 'SPAN' || el.tagName === 'DIV')) {
+                                    el.textContent = failureMessage;
+                                    el.style.color = '#c62828';
+                                    el.style.fontWeight = 'bold';
+                                    el.dataset.fixedText = 'true';
+                                }
+                            }
+                        });
+                        
+                        // Replace buttons
+                        finalStep.querySelectorAll('button, [role="button"]').forEach(btn => {
+                            const btnText = btn.textContent.trim().toLowerCase();
+                            if (btnText === 'next' || btnText === 'continue') {
+                                btn.textContent = 'Try Again';
+                            }
+                        });
+                        
+                        // Mark as replaced to avoid repeated processing
+                        finalStep.dataset.textReplaced = 'true';
+                        console.log('✅ POLLING: Text replacement applied');
+                    }
+                }
                 
                 // CRITICAL: Only redirect if verification was approved/pending (NOT rejected/error)
                 // Also check for error text in the modal
