@@ -218,7 +218,8 @@ app.post('/v2/enduser/verify', async (req, res) => {
         console.error('Response status:', error.response.status);
         console.error('Response data:', error.response.data);
         
-        // Backend validation error (400) - return as rejected verification with 422
+        // Backend validation error (400) - return as rejected verification
+        // IMPORTANT: Return 200 OK (not 422) so Ballerine SDK shows rejection message, not error
         if (error.response.status === 400) {
           const errorMessage = error.response.data.message || error.response.data.detail || '';
           
@@ -232,24 +233,27 @@ app.post('/v2/enduser/verify', async (req, res) => {
             rejectionMessage = `Unsuccessful - ${errorMessage}. Please try again.`;
           }
           
-          return res.status(422).json({
+          console.log('❌ Validation error - returning as rejected (200 OK)');
+          return res.status(200).json({
             verificationId,
             status: 'rejected',
             message: rejectionMessage,
             reason: 'Validation error',
-            error: error.response.data
+            result: error.response.data
           });
         }
         
         // Backend server error (500) - return as rejected verification
+        // IMPORTANT: Return 200 OK (not 422) so Ballerine SDK shows rejection message, not error
         if (error.response.status === 500) {
           console.error('Python ML backend returned 500 error:', error.response.data);
-          return res.status(422).json({
+          console.log('❌ Backend server error - returning as rejected (200 OK)');
+          return res.status(200).json({
             verificationId,
             status: 'rejected',
-            message: 'Verification service temporarily unavailable',
+            message: 'Unsuccessful - Verification service temporarily unavailable. Please try again.',
             reason: 'Backend error',
-            error: error.response.data
+            result: error.response.data
           });
         }
       }
