@@ -3,7 +3,9 @@ FROM nginx:alpine
 
 # Copy static files to nginx html directory
 COPY index.html /usr/share/nginx/html/
-COPY ballerine-sdk.umd.js /usr/share/nginx/html/
+COPY liveness.html /usr/share/nginx/html/
+COPY *.js /usr/share/nginx/html/
+COPY *.css /usr/share/nginx/html/
 COPY *.svg /usr/share/nginx/html/
 
 # Copy start script that configures nginx with Railway's PORT

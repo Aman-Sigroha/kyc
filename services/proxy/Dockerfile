@@ -12,9 +12,9 @@ RUN npm install --production
 # Copy application code
 COPY server.js ./
 
-# Expose port
-EXPOSE 3001
+# Expose port (Railway will inject PORT env var)
+EXPOSE ${PORT:-3001}
 
-# Start the proxy
+# Start the proxy (server.js reads PORT from environment)
 CMD ["node", "server.js"]
 

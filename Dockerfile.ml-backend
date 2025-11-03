@@ -31,6 +31,8 @@ COPY . .
 RUN mkdir -p models && \
     wget -O models/yunet.onnx https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
 
+# Haar cascade files are copied from models/ directory in the repo
+
 # Expose port (Railway will set $PORT)
 EXPOSE 8000
 
