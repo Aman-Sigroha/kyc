@@ -33,7 +33,7 @@ models:
   face_recognition:
     name: "insightface"
     model_name: "buffalo_l"  # buffalo_l (accurate) or buffalo_s (faster)
-    similarity_threshold: 0.4  # 0.3=lenient, 0.4=balanced, 0.5=strict
+    similarity_threshold: 0.2  # 0.3=lenient, 0.35=more lenient, 0.4=balanced, 0.5=strict
   
   # EasyOCR Text Extraction
   ocr:
@@ -77,3 +77,41 @@ processing:
   async_enabled: true  # Use background tasks for heavy operations
   max_concurrent_requests: 10
   timeout_seconds: 30
+
+# Liveness Detection Settings
+liveness:
+  # Blink Detection (MediaPipe)
+  blink:
+    ear_threshold: 0.25  # Eye Aspect Ratio threshold (lower = more sensitive, 0.25 is good balance)
+    consecutive_frames: 1  # Frames below threshold to count as blink (1 = immediate detection)
+    min_detection_confidence: 0.5  # Minimum confidence for face detection
+    min_blink_count: 1  # Minimum blinks required for blink challenge
+  
+  # Profile/Orientation Detection (Haar Cascades)
+  profile:
+    scale_factor: 1.3  # Scale factor for cascade detection
+    min_neighbors: 4  # Minimum neighbors for detection
+    min_size: 30  # Minimum face size in pixels
+  
+  # Challenge System
+  challenge:
+    expires_in: 120  # Challenge expiration time in seconds (increased for user convenience)
+    max_retries: 3  # Maximum retries per challenge
+    required_challenges: 2  # Number of challenges required to pass
+  
+  # Security
+  security:
+    hmac_secret: "change-me-in-production"  # Secret key for HMAC challenge signing (set via env)
+    nonce_length: 32  # Nonce length in bytes
+    timestamp_tolerance: 5  # Timestamp tolerance in seconds
+  
+  # Model Files (Haar Cascades)
+  models:
+    haar_frontal: "haarcascade_frontalface_alt.xml"
+    haar_profile: "haarcascade_profileface.xml"
+  
+  # Detection Settings
+  detection:
+    min_frames: 10  # Minimum frames required for batch detection
+    face_detection_ratio_threshold: 0.5  # Minimum ratio of frames with face detected
+    min_blinks_required: 1  # Minimum blinks required for blink challenge

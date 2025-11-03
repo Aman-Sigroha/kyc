@@ -7,7 +7,12 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"
     />
+    <!-- Performance optimizations for camera feeds - MUST LOAD FIRST -->
+    <meta http-equiv="x-dns-prefetch-control" content="on">
+    <link rel="stylesheet" href="/ballerine-performance.css">
+    <script src="/ballerine-performance.js"></script>
     <script crossorigin src="/ballerine-sdk.umd.js"></script>
+    <script src="/kyc-flow-integration.js"></script>
   </head>
   <body>
     <div id="kyc-host"></div>

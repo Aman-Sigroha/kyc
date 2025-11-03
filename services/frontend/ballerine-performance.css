@@ -1,0 +1,163 @@
+/* Performance Optimizations for Ballerine SDK Camera Feeds */
+
+/* Optimize all video elements (Ballerine SDK uses video for camera) */
+video {
+    /* Hardware acceleration - aggressive */
+    transform: translateZ(0) scale(1);
+    will-change: transform, contents;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    
+    /* Optimize rendering - prioritize speed */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: optimizeSpeed;
+    image-rendering: pixelated;
+    
+    /* Performance hints - all browser prefixes */
+    -webkit-transform: translateZ(0) scale(1);
+    -moz-transform: translateZ(0) scale(1);
+    -ms-transform: translateZ(0) scale(1);
+    -o-transform: translateZ(0) scale(1);
+    
+    /* Reduce repaints - aggressive containment */
+    contain: strict;
+    contain: layout style paint size;
+    
+    /* GPU acceleration - all perspectives */
+    -webkit-backface-visibility: hidden;
+    -moz-backface-visibility: hidden;
+    -ms-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-perspective: 1000;
+    -moz-perspective: 1000;
+    -ms-perspective: 1000;
+    perspective: 1000;
+    
+    /* Disable pointer events for better performance */
+    pointer-events: none;
+    
+    /* Optimize compositing */
+    isolation: isolate;
+    
+    /* Reduce quality for speed */
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    
+    /* Force hardware decoding */
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+}
+
+/* Optimize canvas elements */
+canvas {
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: contents;
+    
+    /* Optimize rendering */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    
+    /* GPU acceleration */
+    -webkit-transform: translateZ(0);
+    -moz-transform: translateZ(0);
+    -ms-transform: translateZ(0);
+    -o-transform: translateZ(0);
+}
+
+/* Optimize Ballerine modal container */
+.svelte-blow3t,
+[data-ballerine-modal] {
+    /* Force GPU acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+    
+    /* Optimize compositing */
+    -webkit-transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+/* Optimize any container with video */
+.video-container,
+[class*="video"],
+[class*="camera"],
+[class*="camera-preview"] {
+    /* GPU acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+    
+    /* Reduce repaints */
+    contain: layout style paint;
+    
+    /* Smooth rendering */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+/* Reduce animations on camera containers */
+@media (prefers-reduced-motion: no-preference) {
+    .video-container * {
+        /* Reduce animation overhead */
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Optimize overlay elements */
+.overlay,
+[class*="overlay"] {
+    /* GPU acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+    
+    /* Isolate compositing layer */
+    isolation: isolate;
+}
+
+/* Reduce paint complexity for camera UI elements */
+button,
+.btn,
+[role="button"] {
+    /* Optimize button rendering */
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+/* Optimize body and main containers */
+body {
+    /* Force GPU acceleration for entire page */
+    transform: translateZ(0);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Disable unnecessary effects during camera capture */
+#kyc-host,
+#blrn-loader,
+.loader-container {
+    /* Optimize loader rendering */
+    transform: translateZ(0);
+    will-change: opacity;
+}
+
+/* Media query for performance on low-end devices */
+@media (max-width: 768px) {
+    video {
+        /* Further optimize for mobile */
+        object-fit: cover;
+        -webkit-transform: translateZ(0) scale(1);
+        transform: translateZ(0) scale(1);
+    }
+}
+
+/* Force compositing layers for smooth video playback */
+@supports (transform: translateZ(0)) {
+    video,
+    canvas {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+}
+

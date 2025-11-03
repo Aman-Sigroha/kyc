@@ -101,7 +101,7 @@ __MACOSX/
 
 # Test and demo files
 test_api_direct.html
-tests/outputs/
+tests/
 
 # Archive files
 *.zip

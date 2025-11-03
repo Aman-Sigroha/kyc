@@ -132,6 +132,7 @@ app.post('/v2/enduser/verify', async (req, res) => {
         });
         
         console.log('🚀 Calling Python ML backend for verification...');
+        console.log('ML Backend URL:', `${ML_BACKEND_URL}/api/v1/kyc/verify`);
         
         const mlResponse = await axios.post(
           `${ML_BACKEND_URL}/api/v1/kyc/verify`,
@@ -141,50 +142,69 @@ app.post('/v2/enduser/verify', async (req, res) => {
               ...formData.getHeaders(),
             },
             maxBodyLength: Infinity,
-            maxContentLength: Infinity
+            maxContentLength: Infinity,
+            timeout: 60000 // 60 second timeout
           }
         );
         
-        console.log('✅ ML Backend Response:', mlResponse.data);
+        console.log('✅ ML Backend Response received');
+        console.log('Response status:', mlResponse.status);
+        console.log('Response data keys:', Object.keys(mlResponse.data || {}));
         
         // Update verification with ML results
-        verification.status = mlResponse.data.verification_status;
+        verification.status = mlResponse.data.verification_status || mlResponse.data.status || 'pending';
         verification.result = mlResponse.data;
         
         // Return appropriate status code based on verification result
-        // IMPORTANT: Ballerine SDK interprets HTTP status codes as:
-        // - 200 = Success (shows green checkmark "Success" screen)
-        // - 4xx/5xx = Failure (shows red X "Rejected" screen)
-        if (mlResponse.data.verification_status === 'approved') {
-          return res.status(200).json({
-            verificationId,
-            status: 'approved',
-            message: 'Identity verified successfully',
-            result: mlResponse.data
-          });
-        } else if (mlResponse.data.verification_status === 'pending') {
-          // Return 422 for pending - SDK will show error screen
-          return res.status(422).json({
-            verificationId,
-            status: 'pending',
-            message: 'Verification pending - face matched but additional verification needed',
-            result: mlResponse.data
-          });
+        // IMPORTANT: Ballerine SDK expects 200 OK for all responses
+        // The status field in the response body determines success/rejection
+        const verificationStatus = mlResponse.data.verification_status || mlResponse.data.status;
+        
+        // Always return 200 OK - SDK checks the status field in the body
+        const response = {
+          verificationId,
+          status: verificationStatus,
+          message: '',
+          result: mlResponse.data
+        };
+        
+        // Check if liveness was completed before approving
+        // This ensures liveness check is mandatory
+        const requiresLiveness = !req.headers['x-liveness-completed'] && 
+                                  !req.body.liveness_completed &&
+                                  verificationStatus === 'approved';
+        
+        if (verificationStatus === 'approved' || verificationStatus === 'success') {
+          // If approved but no liveness check, return pending until liveness is done
+          if (requiresLiveness) {
+            console.log('⚠️ Verification approved but liveness check required - returning pending');
+            response.status = 'pending';
+            response.message = 'Verification pending - liveness check required';
+            return res.status(200).json(response);
+          }
+          
+          console.log('✅ Verification APPROVED');
+          response.message = 'Identity verified successfully';
+          return res.status(200).json(response);
+        } else if (verificationStatus === 'pending') {
+          console.log('⚠️ Verification PENDING');
+          response.message = 'Verification pending - face matched but additional verification needed';
+          // Still return 200, but with pending status
+          return res.status(200).json(response);
         } else {
-          // Return 422 for rejected - SDK will show error screen
-          const rejectedResponse = {
-            verificationId,
-            status: 'rejected',
-            message: mlResponse.data.face_verification_details?.message || 'Verification rejected',
-            reason: 'Face verification failed',
-            result: mlResponse.data
-          };
-          console.log('❌ Returning REJECTED response to frontend (HTTP 422):', JSON.stringify(rejectedResponse, null, 2));
-          return res.status(422).json(rejectedResponse);
+          console.log('❌ Verification REJECTED');
+          response.message = mlResponse.data.face_verification_details?.message || 
+                            mlResponse.data.message || 
+                            'Verification rejected - faces do not match';
+          response.reason = 'Face verification failed';
+          // Return 200 OK but with rejected status - SDK will show rejection screen
+          console.log('Returning REJECTED response to frontend (HTTP 200 with status=rejected)');
+          return res.status(200).json(response);
         }
       }
     } catch (error) {
       console.error('❌ Error processing with ML backend:', error.message);
+      console.error('Error stack:', error.stack);
       verification.status = 'error';
       
       // Return proper error response to frontend
@@ -202,14 +222,46 @@ app.post('/v2/enduser/verify', async (req, res) => {
             error: error.response.data
           });
         }
+        
+        // Backend server error (500) - return as rejected verification
+        if (error.response.status === 500) {
+          console.error('Python ML backend returned 500 error:', error.response.data);
+          return res.status(422).json({
+            verificationId,
+            status: 'rejected',
+            message: 'Verification service temporarily unavailable',
+            reason: 'Backend error',
+            error: error.response.data
+          });
+        }
       }
       
-      // Other errors - return as technical error with 500
+      // Network/connection errors (ECONNREFUSED, ETIMEDOUT, etc.)
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.message.includes('connect')) {
+        console.error('❌ Cannot connect to Python ML backend at', ML_BACKEND_URL);
+        console.error('Make sure the Python backend is running on port 8000');
+        return res.status(503).json({
+          verificationId,
+          status: 'error',
+          message: 'Verification service unavailable',
+          reason: 'ML backend not available',
+          error: 'Cannot connect to ML backend. Please ensure it is running on port 8000.'
+        });
+      }
+      
+      // Other errors - return as technical error with 500 but with more details
+      console.error('Full error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      
       return res.status(500).json({
         verificationId,
         status: 'error',
         message: 'Technical error during verification',
-        error: error.message
+        error: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }
   }
@@ -453,6 +505,85 @@ app.post('/api/v1/kyc/ocr', async (req, res) => {
   }
 });
 
+// ============================================
+// Liveness Detection Endpoints
+// ============================================
+
+// Generate Liveness Challenge
+app.get('/api/v1/liveness/challenge', async (req, res) => {
+  try {
+    console.log('Forwarding liveness challenge request to Python ML backend...');
+    
+    const response = await axios.get(
+      `${ML_BACKEND_URL}/api/v1/liveness/challenge`
+    );
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error calling Python ML backend for challenge:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to generate liveness challenge',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+// Verify Liveness Challenge
+app.post('/api/v1/liveness/verify', async (req, res) => {
+  try {
+    console.log('Forwarding liveness verification request to Python ML backend...');
+    console.log(`Challenge ID: ${req.body?.challenge_id}, Frames: ${req.body?.frames?.length || 0}`);
+    
+    const response = await axios.post(
+      `${ML_BACKEND_URL}/api/v1/liveness/verify`,
+      req.body,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity
+      }
+    );
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error calling Python ML backend for liveness verification:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to verify liveness challenge',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+// Batch Liveness Detection (without challenge)
+app.post('/api/v1/liveness/detect', async (req, res) => {
+  try {
+    console.log('Forwarding batch liveness detection request to Python ML backend...');
+    console.log(`Frames: ${req.body?.frames?.length || 0}`);
+    
+    const response = await axios.post(
+      `${ML_BACKEND_URL}/api/v1/liveness/detect`,
+      req.body,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity
+      }
+    );
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error calling Python ML backend for batch detection:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to process batch liveness detection',
+      details: error.response?.data || error.message
+    });
+  }
+});
+
 // Check Python ML Backend Health
 app.get('/api/v1/ml/health', async (req, res) => {
   try {
@@ -492,6 +623,9 @@ app.get('/', (req, res) => {
       mlHealth: '/api/v1/ml/health',
       kycVerify: '/api/v1/kyc/verify (POST)',
       ocrExtract: '/api/v1/kyc/ocr (POST)',
+      livenessChallenge: '/api/v1/liveness/challenge (GET)',
+      livenessVerify: '/api/v1/liveness/verify (POST)',
+      livenessDetect: '/api/v1/liveness/detect (POST)',
       legacyVerify: '/v2/enduser/verify (POST)',
       legacyStatus: '/v2/enduser/verify/status/:id (GET)'
     }
@@ -511,6 +645,9 @@ app.listen(port, () => {
   console.log(`  POST /api/v1/kyc/verify - KYC verification`);
   console.log(`  POST /api/v1/kyc/ocr - OCR extraction`);
   console.log(`  GET  /api/v1/ml/health - ML backend health`);
+  console.log(`  GET  /api/v1/liveness/challenge - Generate liveness challenge`);
+  console.log(`  POST /api/v1/liveness/verify - Verify liveness challenge`);
+  console.log(`  POST /api/v1/liveness/detect - Batch liveness detection`);
   console.log(`  GET  /health - Proxy health`);
   console.log(`===========================================\n`);
 });

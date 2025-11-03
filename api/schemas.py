@@ -211,3 +211,138 @@ class HealthCheckResponse(BaseModel):
                 "timestamp": "2024-10-11T10:30:00Z"
             }
         }
+
+
+# ============================================================================
+# Liveness Detection Schemas
+# ============================================================================
+
+class ChallengeType(str, Enum):
+    """Types of liveness challenges."""
+    BLINK = "blink"
+    TURN_LEFT = "turn_left"
+    TURN_RIGHT = "turn_right"
+
+
+class ChallengeStatus(str, Enum):
+    """Challenge validation status."""
+    PASS = "pass"
+    FAIL = "fail"
+    PENDING = "pending"
+    EXPIRED = "expired"
+    INVALID = "invalid"
+
+
+class ChallengeResponse(BaseModel):
+    """Liveness challenge generation response."""
+    challenge_id: str = Field(description="Unique challenge identifier")
+    challenge_type: ChallengeType = Field(description="Type of challenge")
+    question: str = Field(description="Challenge question text")
+    instruction: str = Field(description="User-friendly instruction")
+    timestamp: float = Field(description="Challenge creation timestamp")
+    expires_at: float = Field(description="Challenge expiration timestamp")
+    nonce: str = Field(description="Nonce for replay protection")
+    signature: str = Field(description="HMAC signature for challenge integrity")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "challenge_id": "550e8400-e29b-41d4-a716-446655440000",
+                "challenge_type": "blink",
+                "question": "blink eyes",
+                "instruction": "Blink your eyes once",
+                "timestamp": 1697022600.0,
+                "expires_at": 1697022630.0,
+                "nonce": "a1b2c3d4e5f6",
+                "signature": "abc123..."
+            }
+        }
+
+
+class LivenessDetectionResult(BaseModel):
+    """Individual frame detection result."""
+    blinks: int = Field(description="Number of blinks detected")
+    orientation: Optional[str] = Field(description="Face orientation: left, right, or None")
+    face_detected: bool = Field(description="Whether face was detected")
+    ear_value: float = Field(description="Eye Aspect Ratio value")
+    is_blinking: bool = Field(description="Whether eyes are currently blinking")
+
+
+class LivenessVerificationRequest(BaseModel):
+    """Request to verify liveness challenge."""
+    challenge_id: str = Field(description="Challenge ID to verify")
+    frames: list = Field(description="Base64-encoded image frames (list of strings)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "challenge_id": "550e8400-e29b-41d4-a716-446655440000",
+                "frames": ["data:image/jpeg;base64,/9j/4AAQ...", "data:image/jpeg;base64,/9j/4AAQ..."]
+            }
+        }
+
+
+class LivenessVerificationResponse(BaseModel):
+    """Liveness challenge verification response."""
+    challenge_id: str = Field(description="Challenge ID that was verified")
+    status: ChallengeStatus = Field(description="Verification status")
+    message: str = Field(description="Human-readable result message")
+    detection_results: Dict[str, Any] = Field(description="Detailed detection results")
+    processing_time_ms: int = Field(description="Processing time in milliseconds")
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "challenge_id": "550e8400-e29b-41d4-a716-446655440000",
+                "status": "pass",
+                "message": "Blink detected successfully",
+                "detection_results": {
+                    "blinks": 1,
+                    "orientation": None,
+                    "face_detected": True
+                },
+                "processing_time_ms": 450,
+                "timestamp": "2024-10-11T10:30:00Z"
+            }
+        }
+
+
+class LivenessBatchRequest(BaseModel):
+    """Request for batch liveness detection (without challenge)."""
+    frames: list = Field(description="Base64-encoded image frames (list of strings)")
+    initial_blink_count: int = Field(default=0, description="Initial blink count for tracking")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "frames": ["data:image/jpeg;base64,/9j/4AAQ...", "data:image/jpeg;base64,/9j/4AAQ..."],
+                "initial_blink_count": 0
+            }
+        }
+
+
+class LivenessBatchResponse(BaseModel):
+    """Batch liveness detection response."""
+    total_blinks: int = Field(description="Total new blinks detected in batch")
+    final_blink_count: int = Field(description="Final cumulative blink count")
+    orientations: list = Field(description="Detected orientations per frame")
+    face_detection_ratio: float = Field(description="Ratio of frames with face detected")
+    results: list = Field(description="Per-frame detection results")
+    frame_count: int = Field(description="Number of frames processed")
+    processing_time_ms: int = Field(description="Processing time in milliseconds")
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_blinks": 2,
+                "final_blink_count": 2,
+                "orientations": [None, None, "left"],
+                "face_detection_ratio": 0.85,
+                "results": [],
+                "frame_count": 30,
+                "processing_time_ms": 1200,
+                "timestamp": "2024-10-11T10:30:00Z"
+            }
+        }

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liveness Check - KYC Verification</title>
+    <link rel="stylesheet" href="liveness.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="screen active">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p>Setting up liveness check...</p>
+            </div>
+        </div>
+
+        <!-- Challenge Screen -->
+        <div id="challenge-screen" class="screen">
+            <div class="challenge-content">
+                <h1>Liveness Check</h1>
+                <div class="video-container">
+                    <video id="video" autoplay playsinline muted></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                    <div class="overlay">
+                        <div class="face-guide"></div>
+                        <div id="instruction" class="instruction"></div>
+                        <div id="countdown" class="countdown"></div>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button id="start-btn" class="btn btn-primary">Start Camera</button>
+                    <button id="capture-btn" class="btn btn-primary" style="display: none;">Capture Challenge</button>
+                    <button id="retry-btn" class="btn btn-secondary" style="display: none;">Retry</button>
+                </div>
+                <div id="status" class="status"></div>
+            </div>
+        </div>
+
+        <!-- Success Screen -->
+        <div id="success-screen" class="screen">
+            <div class="success-content">
+                <div class="success-icon">✓</div>
+                <h1>Liveness Check Passed!</h1>
+                <p>You have successfully completed the liveness verification.</p>
+                <button id="continue-btn" class="btn btn-primary">Continue</button>
+            </div>
+        </div>
+
+        <!-- Error Screen -->
+        <div id="error-screen" class="screen">
+            <div class="error-content">
+                <div class="error-icon">✗</div>
+                <h1>Liveness Check Failed</h1>
+                <p id="error-message">Please try again.</p>
+                <button id="try-again-btn" class="btn btn-primary">Try Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="liveness.js"></script>
+</body>
+</html>
+

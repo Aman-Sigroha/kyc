@@ -29,6 +29,12 @@ from api.schemas import (
     OCRFields,
     FaceMatchData,
     SimilarityMetrics,
+    ChallengeResponse,
+    ChallengeStatus,
+    LivenessVerificationRequest,
+    LivenessVerificationResponse,
+    LivenessBatchRequest,
+    LivenessBatchResponse,
 )
 # ✅ LAZY IMPORT: Don't import ML libraries at module level
 # They will be imported inside functions only when needed
@@ -41,6 +47,7 @@ logger = get_logger(__name__, log_file="api.log")
 face_detector = None
 face_matcher = None
 ocr_extractor = None
+liveness_detector = None  # Liveness detection service
 ml_import_error: Optional[str] = None  # Track if ML libraries failed to import
 
 # Semaphore to limit concurrent processing
@@ -55,7 +62,7 @@ processing_semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load models at startup, cleanup at shutdown."""
-    global face_detector, face_matcher, ocr_extractor, ml_import_error
+    global face_detector, face_matcher, ocr_extractor, liveness_detector, ml_import_error
     
     logger.info("🚀 Starting KYC Verification Service...")
     
@@ -88,41 +95,41 @@ async def lifespan(app: FastAPI):
         ocr_extractor = await asyncio.to_thread(get_ocr_extractor)
         logger.info("✓ OCR extractor loaded")
         
+        logger.info("Loading liveness detector...")
+        from app.services.liveness_detector import get_liveness_detector
+        liveness_detector = await asyncio.to_thread(get_liveness_detector)
+        logger.info("✓ Liveness detector loaded")
+        
         logger.info("✅ All models loaded successfully")
     except ImportError as e:
         # ML libraries failed to import (e.g., onnxruntime not compatible)
         error_msg = f"ML libraries not available: {str(e)}"
         ml_import_error = error_msg
         logger.error(f"⚠️ {error_msg}")
-        logger.warning("Server will start but ML endpoints will not work")
-    except Exception as e:
-        logger.error(f"❌ Failed to load models: {e}")
-        ml_import_error = str(e)
-        logger.warning("Server will start but ML endpoints will not work")
     
-    yield
+    yield  # Server starts here
     
-    logger.info("Shutting down service...")
+    # Cleanup on shutdown
+    logger.info("Shutting down...")
+    # Add cleanup code here if needed
 
 
 # ============================================================================
-# FastAPI App
+# FastAPI Application
 # ============================================================================
 
 app = FastAPI(
-    title=config.get("project", "name", default="KYC Verification Service"),
-    description=config.get("project", "description", default="KYC with face matching and OCR"),
+    title="KYC Verification API",
+    description="Face matching and OCR extraction for KYC verification",
     version=config.get("project", "version", default="1.0.0"),
-    lifespan=lifespan,
-    docs_url="/api/v1/docs",
-    redoc_url="/api/v1/redoc",
-    openapi_url="/api/v1/openapi.json",
+    lifespan=lifespan
 )
 
-# CORS Middleware
+# CORS configuration
+cors_origins = config.cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for demo
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -135,26 +142,25 @@ app.add_middleware(
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
-    """Handle HTTP exceptions with consistent error format."""
     return JSONResponse(
         status_code=exc.status_code,
         content=ErrorResponse(
             error=exc.__class__.__name__,
-            message=exc.detail,
+            message=str(exc.detail),
+            details=None
         ).model_dump(mode="json")
     )
 
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
-    """Handle unexpected exceptions."""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        status_code=500,
         content=ErrorResponse(
             error="InternalServerError",
-            message="An unexpected error occurred. Please try again.",
-            details={"type": exc.__class__.__name__}
+            message="An unexpected error occurred",
+            details={"type": type(exc).__name__}
         ).model_dump(mode="json")
     )
 
@@ -205,68 +211,75 @@ async def read_upload_file(upload_file: UploadFile) -> np.ndarray:
 
 
 def determine_verification_status(face_verified: bool, ocr_confidence: float) -> VerificationStatus:
-    """Determine overall verification status."""
+    """
+    Determine overall verification status based on face match and OCR confidence.
+    """
     if not face_verified:
         return VerificationStatus.REJECTED
     
     if ocr_confidence < 0.5:
-        return VerificationStatus.PENDING
+        return VerificationStatus.PENDING  # Low OCR confidence, manual review
     
     return VerificationStatus.APPROVED
 
 
-# ✅ FIX #2: Calculate overall confidence score
-def calculate_confidence_score(face_confidence: float, ocr_confidence: float, face_verified: bool) -> float:
+def calculate_confidence_score(
+    face_confidence: float,
+    ocr_confidence: float,
+    face_verified: bool
+) -> float:
     """
-    Calculate overall confidence combining face match and OCR quality.
-    Frontend expects this field.
+    Calculate overall confidence score (weighted: 60% face + 40% OCR).
+    Used by frontend for display.
     """
     if not face_verified:
         return 0.0
     
-    # Weighted average: face match 60%, OCR 40%
-    return (face_confidence * 0.6) + (ocr_confidence * 0.4)
+    # Weighted average
+    return (0.6 * face_confidence) + (0.4 * ocr_confidence)
 
 
 # ============================================================================
 # API Endpoints
 # ============================================================================
 
-@app.get("/", tags=["Root"])
-async def root():
-    """Root endpoint."""
-    return {
-        "service": config.get("project", "name"),
-        "version": config.get("project", "version"),
-        "status": "running",
-        "docs": "/api/v1/docs"
-    }
-
-
 @app.get("/api/v1/health", response_model=HealthCheckResponse, tags=["Health"])
 async def health_check():
-    """Health check with model status."""
-    models_status = {
-        "face_detector": ModelStatus(
-            loaded=face_detector is not None,
-            name="yunet",
-            error=ml_import_error if ml_import_error and face_detector is None else (None if face_detector else "Not loaded")
-        ),
-        "face_matcher": ModelStatus(
-            loaded=face_matcher is not None,
-            name="insightface",
-            error=ml_import_error if ml_import_error and face_matcher is None else (None if face_matcher else "Not loaded")
-        ),
-        "ocr_extractor": ModelStatus(
-            loaded=ocr_extractor is not None,
-            name="easyocr",
-            error=ml_import_error if ml_import_error and ocr_extractor is None else (None if ocr_extractor else "Not loaded")
-        ),
-    }
+    """
+    Health check endpoint with model status.
+    """
+    models_status = {}
+    
+    # Check face detector
+    models_status["face_detector"] = ModelStatus(
+        loaded=face_detector is not None,
+        name="yunet",
+        error=ml_import_error if face_detector is None else None
+    )
+    
+    # Check face matcher
+    models_status["face_matcher"] = ModelStatus(
+        loaded=face_matcher is not None,
+        name="insightface",
+        error=ml_import_error if face_matcher is None else None
+    )
+    
+    # Check OCR extractor
+    models_status["ocr_extractor"] = ModelStatus(
+        loaded=ocr_extractor is not None,
+        name="easyocr",
+        error=ml_import_error if ocr_extractor is None else None
+    )
+    
+    # Check liveness detector
+    models_status["liveness_detector"] = ModelStatus(
+        loaded=liveness_detector is not None,
+        name="mediapipe+haar",
+        error=ml_import_error if liveness_detector is None else None
+    )
     
     all_loaded = all(m.loaded for m in models_status.values())
     
-    # Server is healthy even if ML models aren't loaded (allows health checks to pass)
     return HealthCheckResponse(
         status="healthy" if all_loaded else "degraded",
         version=config.get("project", "version", default="1.0.0"),
@@ -349,35 +362,37 @@ async def verify_kyc(
             
             processing_time_ms = int((time.time() - start_time) * 1000)
             
-            # Build response
-            response = KYCVerificationResponse(
-                verification_status=verification_status,
-                confidence_score=confidence_score,  # ✅ Added for frontend
-                face_match_score=match_result.confidence,
-                ocr_data=OCRData(
-                    document_type=ocr_result.document_type,
-                    confidence=ocr_result.confidence,
-                    extracted_text=ocr_result.extracted_text,
-                    fields=OCRFields(**{
-                        k: v for k, v in ocr_result.to_dict().items()
-                        if k in OCRFields.model_fields
-                    })
-                ),
-                processing_time_ms=processing_time_ms,
-                face_verification_details=FaceMatchData(
-                    verified=match_result.verified,
-                    confidence=match_result.confidence,
-                    similarity_metrics=SimilarityMetrics(
-                        cosine_similarity=match_result.cosine_similarity,
-                        euclidean_distance=match_result.euclidean_distance
-                    ),
-                    threshold_used=match_result.threshold_used,
-                    message=match_result.message
-                )
+            logger.info(f"✓ Verification complete: {verification_status.value} (confidence: {confidence_score:.2f})")
+            
+            # Convert OCRResult to OCRData (Pydantic model)
+            # All fields are Optional, so missing fields will be None - this handles documents with incomplete data
+            ocr_fields = OCRFields(
+                full_name=ocr_result.full_name,
+                date_of_birth=ocr_result.date_of_birth,
+                document_number=ocr_result.document_number,
+                nationality=ocr_result.nationality,
+                issue_date=ocr_result.issue_date,
+                expiry_date=ocr_result.expiry_date,
+                place_of_birth=ocr_result.place_of_birth,
+                address=ocr_result.address,
+                gender=ocr_result.gender
             )
             
-            logger.info(f"✓ Verification complete: {verification_status.value} ({processing_time_ms}ms)")
-            return response
+            ocr_data = OCRData(
+                document_type=ocr_result.document_type,
+                confidence=ocr_result.confidence,
+                extracted_text=ocr_result.extracted_text,
+                fields=ocr_fields
+            )
+            
+            return KYCVerificationResponse(
+                verification_status=verification_status,
+                confidence_score=confidence_score,
+                face_match_score=match_result.confidence,
+                ocr_data=ocr_data,
+                processing_time_ms=processing_time_ms,
+                face_verification_details=match_result.to_dict()
+            )
         
         except HTTPException:
             raise
@@ -390,31 +405,34 @@ async def verify_kyc(
 
 
 @app.post(
-    "/api/v1/kyc/ocr",
+    "/api/v1/ocr/extract",
     response_model=OCROnlyResponse,
     responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
-    tags=["KYC"]
+    tags=["OCR"]
 )
 async def extract_ocr(
-    document_image: UploadFile = File(..., description="ID card/document image")
+    document: UploadFile = File(..., description="Document image for OCR extraction")
 ):
-    """OCR-only endpoint."""
+    """
+    OCR-only endpoint: Extract text from document without face verification.
+    """
     start_time = time.time()
     
-    if not ocr_extractor:
+    if ocr_extractor is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="OCR service not ready"
+            detail="OCR service not ready. Models still loading."
         )
     
     async with processing_semaphore:
         try:
-            image = await read_upload_file(document_image)
+            logger.info("Reading uploaded document...")
+            doc_image = await read_upload_file(document)
             
-            logger.info("Extracting OCR data...")
+            logger.info("Extracting OCR...")
             ocr_result = await asyncio.to_thread(
                 ocr_extractor.extract_structured,
-                image
+                doc_image
             )
             
             processing_time_ms = int((time.time() - start_time) * 1000)
@@ -442,4 +460,241 @@ async def extract_ocr(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"OCR extraction failed: {str(e)}"
+            )
+
+
+# ============================================================================
+# Liveness Detection Endpoints
+# ============================================================================
+
+def decode_base64_image(base64_str: str) -> np.ndarray:
+    """
+    Decode base64 image string to numpy array.
+    
+    Args:
+        base64_str: Base64-encoded image (with or without data URI prefix)
+    
+    Returns:
+        Decoded image as numpy array (BGR format)
+    """
+    import base64
+    from io import BytesIO
+    from PIL import Image
+    
+    # Remove data URI prefix if present
+    if ',' in base64_str:
+        base64_str = base64_str.split(',')[1]
+    
+    try:
+        # Decode base64
+        image_data = base64.b64decode(base64_str)
+        
+        # Convert to PIL Image
+        pil_image = Image.open(BytesIO(image_data))
+        
+        # Convert to RGB if needed
+        if pil_image.mode != 'RGB':
+            pil_image = pil_image.convert('RGB')
+        
+        # Convert to numpy array (RGB)
+        img_array = np.array(pil_image)
+        
+        # Convert RGB to BGR for OpenCV
+        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+        
+        return img_bgr
+    
+    except Exception as e:
+        logger.error(f"Base64 decode error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to decode base64 image: {str(e)}"
+        )
+
+
+@app.get(
+    "/api/v1/liveness/challenge",
+    response_model=ChallengeResponse,
+    tags=["Liveness"]
+)
+async def generate_challenge():
+    """
+    Generate a new liveness challenge.
+    Returns a challenge that the user must complete (blink, turn left, turn right).
+    """
+    try:
+        from app.services.liveness_challenges import get_challenge_generator
+        
+        generator = get_challenge_generator()
+        challenge = generator.generate_challenge()
+        
+        logger.info(f"Generated challenge: {challenge.challenge_type.value} (ID: {challenge.challenge_id})")
+        
+        return ChallengeResponse(**challenge.to_dict())
+    
+    except Exception as e:
+        logger.error(f"Challenge generation error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate challenge: {str(e)}"
+        )
+
+
+@app.post(
+    "/api/v1/liveness/verify",
+    response_model=LivenessVerificationResponse,
+    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    tags=["Liveness"]
+)
+async def verify_liveness_challenge(request: LivenessVerificationRequest):
+    """
+    Verify a liveness challenge with captured frames.
+    Processes frames and validates against the challenge requirements.
+    """
+    start_time = time.time()
+    
+    if liveness_detector is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Liveness detector not available. Service may still be loading."
+        )
+    
+    async with processing_semaphore:
+        try:
+            # Validate request
+            if not request.frames or len(request.frames) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No frames provided"
+                )
+            
+            min_frames = config.get("liveness", "detection", "min_frames", default=10)
+            if len(request.frames) < min_frames:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Not enough frames. Minimum: {min_frames}, received: {len(request.frames)}"
+                )
+            
+            logger.info(f"Verifying challenge {request.challenge_id} with {len(request.frames)} frames...")
+            
+            # Decode base64 frames
+            decoded_frames = []
+            for i, frame_str in enumerate(request.frames):
+                try:
+                    frame = decode_base64_image(frame_str)
+                    decoded_frames.append(frame)
+                except Exception as e:
+                    logger.warning(f"Failed to decode frame {i}: {e}")
+                    # Continue with other frames
+            
+            if len(decoded_frames) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to decode any frames"
+                )
+            
+            # Verify challenge
+            status_result, message, results = await asyncio.to_thread(
+                liveness_detector.verify_challenge,
+                request.challenge_id,
+                decoded_frames,
+                0,  # initial_counter
+                0   # initial_total
+            )
+            
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            
+            logger.info(f"Challenge verification: {status_result.value} - {message}")
+            
+            return LivenessVerificationResponse(
+                challenge_id=request.challenge_id,
+                status=status_result,
+                message=message,
+                detection_results=results.get("detection_results", {}),
+                processing_time_ms=processing_time_ms
+            )
+        
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Liveness verification error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Liveness verification failed: {str(e)}"
+            )
+
+
+@app.post(
+    "/api/v1/liveness/detect",
+    response_model=LivenessBatchResponse,
+    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    tags=["Liveness"]
+)
+async def detect_liveness_batch(request: LivenessBatchRequest):
+    """
+    Perform batch liveness detection without challenge.
+    Useful for continuous detection or testing.
+    """
+    start_time = time.time()
+    
+    if liveness_detector is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Liveness detector not available. Service may still be loading."
+        )
+    
+    async with processing_semaphore:
+        try:
+            # Validate request
+            if not request.frames or len(request.frames) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No frames provided"
+                )
+            
+            logger.info(f"Processing batch liveness detection with {len(request.frames)} frames...")
+            
+            # Decode base64 frames
+            decoded_frames = []
+            for i, frame_str in enumerate(request.frames):
+                try:
+                    frame = decode_base64_image(frame_str)
+                    decoded_frames.append(frame)
+                except Exception as e:
+                    logger.warning(f"Failed to decode frame {i}: {e}")
+                    # Continue with other frames
+            
+            if len(decoded_frames) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to decode any frames"
+                )
+            
+            # Detect liveness
+            batch_results = await asyncio.to_thread(
+                liveness_detector.detect_batch,
+                decoded_frames,
+                0,  # initial_counter
+                request.initial_blink_count  # initial_total
+            )
+            
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            
+            return LivenessBatchResponse(
+                total_blinks=batch_results.get("total_blinks", 0),
+                final_blink_count=batch_results.get("final_blink_count", 0),
+                orientations=batch_results.get("orientations", []),
+                face_detection_ratio=batch_results.get("face_detection_ratio", 0.0),
+                results=batch_results.get("results", []),
+                frame_count=batch_results.get("frame_count", len(decoded_frames)),
+                processing_time_ms=processing_time_ms
+            )
+        
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Batch liveness detection error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Batch liveness detection failed: {str(e)}"
             )

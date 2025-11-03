@@ -59,6 +59,12 @@ class EnvironmentSettings(BaseSettings):
     # API Security (optional)
     API_KEY: Optional[str] = Field(default=None, description="API key for authentication")
     
+    # Liveness Detection Security
+    LIVENESS_HMAC_SECRET: Optional[str] = Field(
+        default=None,
+        description="Secret key for HMAC challenge signing (liveness detection)"
+    )
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -99,6 +105,14 @@ class Config:
         
         if self.env.S3_BUCKET:
             merged["storage"]["s3_bucket"] = self.env.S3_BUCKET
+        
+        # Liveness security override
+        if self.env.LIVENESS_HMAC_SECRET:
+            if "liveness" not in merged:
+                merged["liveness"] = {}
+            if "security" not in merged["liveness"]:
+                merged["liveness"]["security"] = {}
+            merged["liveness"]["security"]["hmac_secret"] = self.env.LIVENESS_HMAC_SECRET
         
         # Add computed values
         merged["project"]["env"] = self.env.ENV
