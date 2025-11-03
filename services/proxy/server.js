@@ -192,13 +192,19 @@ app.post('/v2/enduser/verify', async (req, res) => {
           // Still return 200, but with pending status
           return res.status(200).json(response);
         } else {
-          console.log('❌ Verification REJECTED');
-          response.message = mlResponse.data.face_verification_details?.message || 
-                            mlResponse.data.message || 
-                            'Verification rejected - faces do not match';
-          response.reason = 'Face verification failed';
+          console.log('❌ Verification REJECTED - Face matching below threshold');
+          
+          // Get the face match score from the response to provide context
+          const faceMatchScore = mlResponse.data.face_match_score || mlResponse.data.face_verification_details?.confidence || 0;
+          const threshold = mlResponse.data.face_verification_details?.threshold_used || 0.2;
+          
+          // Clear rejection message for frontend
+          response.message = `Unsuccessful - Face matching score (${(faceMatchScore * 100).toFixed(1)}%) is below the required threshold (${(threshold * 100).toFixed(1)}%). Please try again with better lighting and ensure your face is clearly visible.`;
+          response.reason = 'Face verification failed - matching percentage below threshold';
+          
           // Return 200 OK but with rejected status - SDK will show rejection screen
           console.log('Returning REJECTED response to frontend (HTTP 200 with status=rejected)');
+          console.log(`Face match: ${(faceMatchScore * 100).toFixed(1)}%, Threshold: ${(threshold * 100).toFixed(1)}%`);
           return res.status(200).json(response);
         }
       }
@@ -214,10 +220,22 @@ app.post('/v2/enduser/verify', async (req, res) => {
         
         // Backend validation error (400) - return as rejected verification with 422
         if (error.response.status === 400) {
+          const errorMessage = error.response.data.message || error.response.data.detail || '';
+          
+          // Check if it's a face matching failure
+          let rejectionMessage = 'Unsuccessful - Please try again.';
+          if (errorMessage.includes('face') || errorMessage.includes('match') || errorMessage.includes('similarity')) {
+            rejectionMessage = 'Unsuccessful - Face matching failed. Please ensure your face is clearly visible and matches your ID photo. Try again with better lighting.';
+          } else if (errorMessage.includes('detect')) {
+            rejectionMessage = 'Unsuccessful - Could not detect face in the image. Please ensure your face is clearly visible. Try again.';
+          } else {
+            rejectionMessage = `Unsuccessful - ${errorMessage}. Please try again.`;
+          }
+          
           return res.status(422).json({
             verificationId,
             status: 'rejected',
-            message: error.response.data.message || 'Verification failed',
+            message: rejectionMessage,
             reason: 'Validation error',
             error: error.response.data
           });
