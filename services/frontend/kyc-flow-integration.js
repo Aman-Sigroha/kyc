@@ -327,10 +327,6 @@
         
         if (modal) {
             mutationObserver = new MutationObserver((mutations) => {
-                if (hasRedirected || sessionStorage.getItem('liveness_completed')) {
-                    return;
-                }
-                
                 const currentModal = document.querySelector('[data-ballerine-modal]') || 
                                    document.querySelector('.svelte-blow3t');
                 
@@ -354,6 +350,72 @@
                     const wasPendingForLiveness = lastStatus === 'pending' && lastMessage.includes('liveness check required');
                     const wasApprovedOrPendingForLiveness = lastStatus === 'approved' || lastStatus === 'success' || lastStatus === 'verified' || wasPendingForLiveness;
                     const wasRejectedOrError = lastStatus === 'rejected' || lastStatus === 'failed' || lastStatus === 'error';
+                    
+                    // FIX: If verification was rejected but SDK shows success screen, change the text
+                    if (finalStep && wasRejectedOrError && hasSuccessText && !hasErrorText) {
+                        console.log('🔧 FIX: Verification rejected but SDK shows success screen - changing text to failure message');
+                        
+                        // Find all text elements in the final step
+                        const textElements = finalStep.querySelectorAll('h1, h2, h3, p, span, div');
+                        const lastMessageFromStorage = sessionStorage.getItem('last_verification_message') || '';
+                        
+                        // Default failure messages
+                        let failureTitle = 'KYC Failed';
+                        let failureMessage = 'Face didn\'t match. Please try again.';
+                        
+                        // Use message from storage if available
+                        if (lastMessageFromStorage) {
+                            if (lastMessageFromStorage.toLowerCase().includes('face')) {
+                                failureTitle = 'KYC Failed';
+                                failureMessage = 'Face didn\'t match. Please try again.';
+                            } else if (lastMessageFromStorage.toLowerCase().includes('unsuccessful')) {
+                                failureTitle = 'Unsuccessful';
+                                failureMessage = lastMessageFromStorage;
+                            } else {
+                                failureMessage = lastMessageFromStorage;
+                            }
+                        }
+                        
+                        // Replace success text with failure text
+                        textElements.forEach(el => {
+                            const text = el.textContent || el.innerText || '';
+                            if (text.includes('verified') || text.includes('success') || text.includes('approved') || text.includes('Identity verified')) {
+                                // Replace with failure message
+                                if (el.tagName === 'H1' || el.tagName === 'H2') {
+                                    el.textContent = failureTitle;
+                                } else {
+                                    el.textContent = failureMessage;
+                                }
+                                
+                                // Add error styling
+                                el.style.color = '#c62828';
+                                el.style.fontWeight = 'bold';
+                                
+                                console.log(`Changed text: "${text}" → "${el.textContent}"`);
+                            }
+                        });
+                        
+                        // Also try to change icon/visual indicators
+                        const icons = finalStep.querySelectorAll('[class*="success"], [class*="check"], [class*="checkmark"]');
+                        icons.forEach(icon => {
+                            if (icon.textContent === '✓' || icon.textContent === '✔' || icon.textContent.includes('check')) {
+                                icon.textContent = '✗';
+                                icon.style.color = '#c62828';
+                                icon.style.background = '#ffebee';
+                            }
+                        });
+                        
+                        // Prevent redirect to liveness for rejected verifications
+                        if (!hasRedirected && !sessionStorage.getItem('liveness_completed')) {
+                            console.log('❌ Verification REJECTED - NOT redirecting to liveness');
+                            return;
+                        }
+                    }
+                    
+                    // Only redirect if verification was approved/pending (NOT rejected/error)
+                    if (hasRedirected || sessionStorage.getItem('liveness_completed')) {
+                        return;
+                    }
                     
                     // Only redirect if:
                     // 1. We see success screen
