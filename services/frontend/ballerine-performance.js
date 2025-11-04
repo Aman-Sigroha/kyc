@@ -382,18 +382,26 @@
                 if (video.srcObject && video.srcObject instanceof MediaStream) {
                     const tracks = video.srcObject.getVideoTracks();
                     tracks.forEach(track => {
-                        const settings = track.getSettings();
-                        if (settings.width > OPTIMIZATION_CONFIG.maxVideoWidth || 
-                            settings.height > OPTIMIZATION_CONFIG.maxVideoHeight ||
-                            (settings.frameRate && settings.frameRate > OPTIMIZATION_CONFIG.maxFrameRate)) {
+                        try {
+                            const settings = track.getSettings();
+                            // Check if this is a selfie (front camera)
+                            const isSelfie = settings.facingMode === 'user' || settings.facingMode === 'front';
                             
-                            track.applyConstraints({
-                                width: { ideal: Math.min(settings.width || 640, OPTIMIZATION_CONFIG.maxVideoWidth) },
-                                height: { ideal: Math.min(settings.height || 480, OPTIMIZATION_CONFIG.maxVideoHeight) },
-                                frameRate: { ideal: Math.min(settings.frameRate || 24, OPTIMIZATION_CONFIG.maxFrameRate) }
-                            }).catch(err => {
-                                // Silently fail - constraints might not be changeable
-                            });
+                            // Only optimize document scanning, not selfies
+                            if (!isSelfie && (settings.width > OPTIMIZATION_CONFIG.maxVideoWidth || 
+                                settings.height > OPTIMIZATION_CONFIG.maxVideoHeight ||
+                                (settings.frameRate && settings.frameRate > OPTIMIZATION_CONFIG.maxFrameRate))) {
+                                
+                                track.applyConstraints({
+                                    width: { ideal: Math.min(settings.width || 640, OPTIMIZATION_CONFIG.maxVideoWidth) },
+                                    height: { ideal: Math.min(settings.height || 480, OPTIMIZATION_CONFIG.maxVideoHeight) },
+                                    frameRate: { ideal: Math.min(settings.frameRate || 24, OPTIMIZATION_CONFIG.maxFrameRate) }
+                                }).catch(err => {
+                                    // Silently fail - constraints might not be changeable
+                                });
+                            }
+                        } catch (err) {
+                            // Silently fail - might not be able to get settings
                         }
                     });
                 }
