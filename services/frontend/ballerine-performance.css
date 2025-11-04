@@ -116,6 +116,53 @@ canvas {
     isolation: isolate;
 }
 
+/* Increase document capture frame size for better image quality */
+/* Target the document capture frame/box inside Ballerine SDK */
+[class*="document"] [class*="frame"],
+[class*="document"] [class*="box"],
+[class*="document"] [class*="overlay"],
+[class*="camera"] [class*="frame"],
+[class*="camera"] [class*="box"],
+[class*="camera"] [class*="overlay"],
+svg[class*="frame"],
+svg[class*="overlay"],
+rect[class*="frame"],
+path[class*="frame"] {
+    /* Make the frame much larger - use 90% of screen width and height */
+    width: 90% !important;
+    max-width: 90% !important;
+    height: 70% !important;
+    max-height: 70% !important;
+    min-width: 85% !important;
+    min-height: 60% !important;
+}
+
+/* Target any rectangular frame elements that might be the document capture area */
+[class*="svelte"] [class*="frame"] {
+    width: 90% !important;
+    max-width: 90% !important;
+    height: 70% !important;
+    max-height: 70% !important;
+}
+
+/* Increase SVG frame dimensions if Ballerine uses SVG for the frame */
+svg {
+    width: 90% !important;
+    max-width: 90% !important;
+    height: 70% !important;
+    max-height: 70% !important;
+}
+
+/* Target the document capture container specifically */
+[data-step*="document"] [class*="frame"],
+[data-step*="document"] [class*="box"],
+[data-step*="document"] svg {
+    width: 90% !important;
+    max-width: 90% !important;
+    height: 70% !important;
+    max-height: 70% !important;
+}
+
 /* Reduce paint complexity for camera UI elements */
 button,
 .btn,

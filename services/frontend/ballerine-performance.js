@@ -464,10 +464,113 @@
         
         console.log('🚀 ULTRA-AGGRESSIVE Ballerine SDK camera performance optimizations ACTIVE');
         console.log('📹 Video constraints: max', OPTIMIZATION_CONFIG.maxVideoWidth + 'x' + OPTIMIZATION_CONFIG.maxVideoHeight + '@' + OPTIMIZATION_CONFIG.maxFrameRate + 'fps');
+        
+        // Increase document capture frame size for better image quality
+        increaseDocumentFrameSize();
         console.log('⚙️  Use window.optimizeBallerineCamera() to manually optimize');
     }
     
     // Start IMMEDIATELY - don't wait for DOM
+    // Increase document capture frame size dynamically
+    function increaseDocumentFrameSize() {
+        // Function to resize frame elements
+        function resizeFrames() {
+            // Find all potential frame elements
+            const selectors = [
+                'svg[class*="frame"]',
+                'rect[class*="frame"]',
+                'path[class*="frame"]',
+                '[class*="document"] [class*="frame"]',
+                '[class*="camera"] [class*="frame"]',
+                '[class*="svelte"] [class*="frame"]',
+                '[data-step*="document"] [class*="frame"]',
+                '[data-step*="document"] svg',
+                '[data-step*="document"] rect',
+                '[data-step*="document"] path'
+            ];
+            
+            selectors.forEach(selector => {
+                try {
+                    const elements = document.querySelectorAll(selector);
+                    elements.forEach(el => {
+                        // Check if this looks like a frame (has width/height attributes or is an SVG)
+                        if (el.tagName === 'SVG' || el.tagName === 'RECT' || el.tagName === 'PATH') {
+                            // For SVG elements, update width/height attributes
+                            if (el.hasAttribute('width')) {
+                                const currentWidth = parseFloat(el.getAttribute('width'));
+                                if (currentWidth < 500) { // Only resize if it's small
+                                    el.setAttribute('width', '90%');
+                                    el.style.width = '90%';
+                                }
+                            }
+                            if (el.hasAttribute('height')) {
+                                const currentHeight = parseFloat(el.getAttribute('height'));
+                                if (currentHeight < 400) { // Only resize if it's small
+                                    el.setAttribute('height', '70%');
+                                    el.style.height = '70%';
+                                }
+                            }
+                        } else {
+                            // For div/other elements, update CSS
+                            const computedStyle = window.getComputedStyle(el);
+                            const width = parseFloat(computedStyle.width);
+                            const height = parseFloat(computedStyle.height);
+                            
+                            // Only resize if it's a small frame (likely the document capture box)
+                            if (width < 500 && height < 400 && width > 0 && height > 0) {
+                                el.style.width = '90%';
+                                el.style.maxWidth = '90%';
+                                el.style.height = '70%';
+                                el.style.maxHeight = '70%';
+                                el.style.minWidth = '85%';
+                                el.style.minHeight = '60%';
+                                console.log(`📐 Resized document frame: ${width}x${height} → 90%x70%`);
+                            }
+                        }
+                    });
+                } catch (e) {
+                    // Silently ignore selector errors
+                }
+            });
+        }
+        
+        // Resize immediately
+        resizeFrames();
+        
+        // Watch for new frame elements appearing (when SDK loads document step)
+        const frameObserver = new MutationObserver((mutations) => {
+            let shouldResize = false;
+            mutations.forEach(mutation => {
+                if (mutation.addedNodes.length > 0) {
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === 1) { // Element node
+                            if (node.tagName === 'SVG' || node.tagName === 'RECT' || node.tagName === 'PATH' ||
+                                node.classList?.toString().includes('frame') ||
+                                node.querySelector?.('svg, rect, path, [class*="frame"]')) {
+                                shouldResize = true;
+                            }
+                        }
+                    });
+                }
+            });
+            
+            if (shouldResize) {
+                setTimeout(resizeFrames, 100); // Small delay to ensure element is fully rendered
+            }
+        });
+        
+        // Start observing
+        frameObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        // Also resize periodically to catch dynamic changes
+        setInterval(resizeFrames, 500);
+        
+        console.log('✅ Document frame resize observer active');
+    }
+    
     // This ensures we intercept getUserMedia before SDK loads
     if (document.readyState === 'loading') {
         // Initialize ASAP, don't wait for DOMContentLoaded
