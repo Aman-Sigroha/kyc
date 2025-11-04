@@ -473,63 +473,126 @@
     // Start IMMEDIATELY - don't wait for DOM
     // Increase document capture frame size dynamically
     function increaseDocumentFrameSize() {
-        // Function to resize frame elements
+        // Function to resize frame elements - MORE AGGRESSIVE
         function resizeFrames() {
-            // Find all potential frame elements
-            const selectors = [
-                'svg[class*="frame"]',
-                'rect[class*="frame"]',
-                'path[class*="frame"]',
-                '[class*="document"] [class*="frame"]',
-                '[class*="camera"] [class*="frame"]',
-                '[class*="svelte"] [class*="frame"]',
-                '[data-step*="document"] [class*="frame"]',
-                '[data-step*="document"] svg',
-                '[data-step*="document"] rect',
-                '[data-step*="document"] path'
+            // Find ALL SVG elements and check if they're frames
+            const allSvgs = document.querySelectorAll('svg');
+            allSvgs.forEach(svg => {
+                try {
+                    const computedStyle = window.getComputedStyle(svg);
+                    const width = parseFloat(computedStyle.width) || parseFloat(svg.getAttribute('width')) || 0;
+                    const height = parseFloat(computedStyle.height) || parseFloat(svg.getAttribute('height')) || 0;
+                    
+                    // Check if this SVG is inside a document/camera step
+                    const parent = svg.closest('[class*="document"], [class*="camera"], [data-step*="document"]');
+                    if (parent || (width > 0 && width < 600 && height > 0 && height < 500)) {
+                        // Force larger size
+                        svg.style.width = '90%';
+                        svg.style.maxWidth = '90%';
+                        svg.style.height = '70%';
+                        svg.style.maxHeight = '70%';
+                        svg.setAttribute('width', '90%');
+                        svg.setAttribute('height', '70%');
+                        if (svg.hasAttribute('viewBox')) {
+                            // Try to adjust viewBox to maintain aspect ratio but scale up
+                            const viewBox = svg.getAttribute('viewBox');
+                            if (viewBox) {
+                                const [x, y, w, h] = viewBox.split(' ').map(Number);
+                                if (w && h && w < 600 && h < 500) {
+                                    // Scale up viewBox by 2x
+                                    svg.setAttribute('viewBox', `${x} ${y} ${w * 2} ${h * 2}`);
+                                }
+                            }
+                        }
+                        console.log(`📐 Resized SVG frame: ${width}x${height} → 90%x70%`);
+                    }
+                } catch (e) {
+                    // Ignore
+                }
+            });
+            
+            // Find ALL rect elements (common for frames)
+            const allRects = document.querySelectorAll('rect');
+            allRects.forEach(rect => {
+                try {
+                    const width = parseFloat(rect.getAttribute('width')) || 0;
+                    const height = parseFloat(rect.getAttribute('height')) || 0;
+                    
+                    // Check if this rect is inside a document/camera step
+                    const parent = rect.closest('[class*="document"], [class*="camera"], [data-step*="document"]');
+                    if (parent || (width > 0 && width < 600 && height > 0 && height < 500)) {
+                        // Scale up the rect
+                        const currentX = parseFloat(rect.getAttribute('x')) || 0;
+                        const currentY = parseFloat(rect.getAttribute('y')) || 0;
+                        const scale = 2; // Scale up by 2x
+                        
+                        // Adjust position to center the larger frame
+                        rect.setAttribute('x', currentX - (width * (scale - 1) / 2));
+                        rect.setAttribute('y', currentY - (height * (scale - 1) / 2));
+                        rect.setAttribute('width', width * scale);
+                        rect.setAttribute('height', height * scale);
+                        console.log(`📐 Scaled rect frame: ${width}x${height} → ${width * scale}x${height * scale}`);
+                    }
+                } catch (e) {
+                    // Ignore
+                }
+            });
+            
+            // Find ALL div elements that might be frames
+            const allDivs = document.querySelectorAll('div');
+            allDivs.forEach(div => {
+                try {
+                    const computedStyle = window.getComputedStyle(div);
+                    const width = parseFloat(computedStyle.width);
+                    const height = parseFloat(computedStyle.height);
+                    const hasBorder = computedStyle.borderWidth !== '0px' || computedStyle.outlineWidth !== '0px';
+                    const isPositioned = computedStyle.position !== 'static';
+                    
+                    // Check if this looks like a frame (has border, is positioned, small size)
+                    const parent = div.closest('[class*="document"], [class*="camera"], [data-step*="document"]');
+                    if (parent && width > 0 && height > 0 && width < 600 && height < 500 && (hasBorder || isPositioned)) {
+                        div.style.width = '90%';
+                        div.style.maxWidth = '90%';
+                        div.style.height = '70%';
+                        div.style.maxHeight = '70%';
+                        div.style.minWidth = '85%';
+                        div.style.minHeight = '60%';
+                        console.log(`📐 Resized div frame: ${width}x${height} → 90%x70%`);
+                    }
+                } catch (e) {
+                    // Ignore
+                }
+            });
+            
+            // Also try to find elements by common Ballerine class patterns
+            const ballerineSelectors = [
+                '[class*="svelte"] svg',
+                '[class*="svelte"] rect',
+                '[class*="svelte"] path',
+                '[class*="frame"]',
+                '[class*="overlay"]',
+                '[class*="guide"]',
+                '[class*="box"]'
             ];
             
-            selectors.forEach(selector => {
+            ballerineSelectors.forEach(selector => {
                 try {
                     const elements = document.querySelectorAll(selector);
                     elements.forEach(el => {
-                        // Check if this looks like a frame (has width/height attributes or is an SVG)
-                        if (el.tagName === 'SVG' || el.tagName === 'RECT' || el.tagName === 'PATH') {
-                            // For SVG elements, update width/height attributes
-                            if (el.hasAttribute('width')) {
-                                const currentWidth = parseFloat(el.getAttribute('width'));
-                                if (currentWidth < 500) { // Only resize if it's small
-                                    el.setAttribute('width', '90%');
-                                    el.style.width = '90%';
-                                }
-                            }
-                            if (el.hasAttribute('height')) {
-                                const currentHeight = parseFloat(el.getAttribute('height'));
-                                if (currentHeight < 400) { // Only resize if it's small
-                                    el.setAttribute('height', '70%');
-                                    el.style.height = '70%';
-                                }
-                            }
-                        } else {
-                            // For div/other elements, update CSS
-                            const computedStyle = window.getComputedStyle(el);
-                            const width = parseFloat(computedStyle.width);
-                            const height = parseFloat(computedStyle.height);
-                            
-                            // Only resize if it's a small frame (likely the document capture box)
-                            if (width < 500 && height < 400 && width > 0 && height > 0) {
-                                el.style.width = '90%';
-                                el.style.maxWidth = '90%';
-                                el.style.height = '70%';
-                                el.style.maxHeight = '70%';
-                                el.style.minWidth = '85%';
-                                el.style.minHeight = '60%';
-                                console.log(`📐 Resized document frame: ${width}x${height} → 90%x70%`);
-                            }
+                        const computedStyle = window.getComputedStyle(el);
+                        const width = parseFloat(computedStyle.width);
+                        const height = parseFloat(computedStyle.height);
+                        
+                        if (width > 0 && width < 600 && height > 0 && height < 500) {
+                            el.style.width = '90%';
+                            el.style.maxWidth = '90%';
+                            el.style.height = '70%';
+                            el.style.maxHeight = '70%';
+                            console.log(`📐 Resized element (${selector}): ${width}x${height} → 90%x70%`);
                         }
                     });
                 } catch (e) {
-                    // Silently ignore selector errors
+                    // Ignore
                 }
             });
         }
