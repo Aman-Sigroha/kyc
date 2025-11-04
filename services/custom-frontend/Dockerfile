@@ -10,20 +10,26 @@ COPY liveness.html /usr/share/nginx/html/
 COPY liveness.js /usr/share/nginx/html/
 COPY liveness.css /usr/share/nginx/html/
 
-# Create nginx config for SPA routing
-RUN echo 'server {' > /etc/nginx/conf.d/default.conf && \
-    echo '    listen 80;' >> /etc/nginx/conf.d/default.conf && \
-    echo '    server_name _;' >> /etc/nginx/conf.d/default.conf && \
-    echo '    root /usr/share/nginx/html;' >> /etc/nginx/conf.d/default.conf && \
-    echo '    index index.html;' >> /etc/nginx/conf.d/default.conf && \
-    echo '    location / {' >> /etc/nginx/conf.d/default.conf && \
-    echo '        try_files $uri $uri/ /index.html;' >> /etc/nginx/conf.d/default.conf && \
-    echo '    }' >> /etc/nginx/conf.d/default.conf && \
-    echo '}' >> /etc/nginx/conf.d/default.conf
+# Create nginx config template for SPA routing
+# Railway sets PORT environment variable, we need to use it
+RUN echo 'server {' > /etc/nginx/templates/default.conf.template && \
+    echo '    listen ${PORT} default_server;' >> /etc/nginx/templates/default.conf.template && \
+    echo '    listen [::]:${PORT} default_server;' >> /etc/nginx/templates/default.conf.template && \
+    echo '    server_name _;' >> /etc/nginx/templates/default.conf.template && \
+    echo '    root /usr/share/nginx/html;' >> /etc/nginx/templates/default.conf.template && \
+    echo '    index index.html;' >> /etc/nginx/templates/default.conf.template && \
+    echo '    location / {' >> /etc/nginx/templates/default.conf.template && \
+    echo '        try_files $uri $uri/ /index.html;' >> /etc/nginx/templates/default.conf.template && \
+    echo '    }' >> /etc/nginx/templates/default.conf.template && \
+    echo '    location /health {' >> /etc/nginx/templates/default.conf.template && \
+    echo '        return 200 "OK";' >> /etc/nginx/templates/default.conf.template && \
+    echo '        add_header Content-Type text/plain;' >> /etc/nginx/templates/default.conf.template && \
+    echo '    }' >> /etc/nginx/templates/default.conf.template && \
+    echo '}' >> /etc/nginx/templates/default.conf.template
 
-# Expose port
+# Expose port (Railway will set PORT env var dynamically)
 EXPOSE 80
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Nginx will automatically process templates in /etc/nginx/templates/
+# and output to /etc/nginx/conf.d/ when container starts
 
