@@ -6,9 +6,9 @@
     
     // Configuration - Balanced optimizations for performance and quality
     const OPTIMIZATION_CONFIG = {
-        // Low resolution for document scanning (for performance)
-        maxVideoWidth: 480,  
-        maxVideoHeight: 360,
+        // High resolution for document scanning (for better OCR accuracy)
+        maxVideoWidth: 1280,  
+        maxVideoHeight: 720,
         // High resolution for selfie captures (for face recognition accuracy)
         maxVideoWidthSelfie: 1280,  // High quality for selfie/face matching
         maxVideoHeightSelfie: 720,  // High quality for selfie/face matching
