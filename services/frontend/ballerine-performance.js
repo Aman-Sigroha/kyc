@@ -4,10 +4,14 @@
 (function() {
     'use strict';
     
-    // Configuration - ULTRA-AGGRESSIVE optimizations for maximum performance
+    // Configuration - Balanced optimizations for performance and quality
     const OPTIMIZATION_CONFIG = {
-        maxVideoWidth: 480,  // Even more reduced for ultra-fast startup
-        maxVideoHeight: 360, // Even more reduced for ultra-fast startup
+        // Low resolution for document scanning (for performance)
+        maxVideoWidth: 480,  
+        maxVideoHeight: 360,
+        // High resolution for selfie captures (for face recognition accuracy)
+        maxVideoWidthSelfie: 1280,  // High quality for selfie/face matching
+        maxVideoHeightSelfie: 720,  // High quality for selfie/face matching
         maxFrameRate: 15,     // Lower frame rate for smoother playback
         optimizeInterval: 100, // Check very frequently (every 100ms)
         maxOptimizationAttempts: 50, // Monitor much longer (5 seconds)
@@ -265,7 +269,16 @@
             if (constraints && constraints.video) {
                 const videoConstraints = constraints.video;
                 
-                // Apply our ULTRA-AGGRESSIVE limits (but flexible for compatibility)
+                // Check if this is a selfie capture (front camera) - needs higher quality for face recognition
+                const isSelfieCapture = videoConstraints.facingMode === 'user' || 
+                                       videoConstraints.facingMode === 'front' ||
+                                       (typeof videoConstraints === 'object' && !videoConstraints.facingMode);
+                
+                // Use higher resolution for selfies, lower for document scanning
+                const maxWidth = isSelfieCapture ? OPTIMIZATION_CONFIG.maxVideoWidthSelfie : OPTIMIZATION_CONFIG.maxVideoWidth;
+                const maxHeight = isSelfieCapture ? OPTIMIZATION_CONFIG.maxVideoHeightSelfie : OPTIMIZATION_CONFIG.maxVideoHeight;
+                
+                // Apply optimized limits (but flexible for compatibility)
                 if (typeof videoConstraints === 'object') {
                     // Preserve facingMode if specified (important for front/back camera)
                     const facingMode = videoConstraints.facingMode;
@@ -273,13 +286,13 @@
                     constraints.video = {
                         ...videoConstraints,
                         width: {
-                            ideal: OPTIMIZATION_CONFIG.maxVideoWidth,
-                            max: OPTIMIZATION_CONFIG.maxVideoWidth
+                            ideal: maxWidth,
+                            max: maxWidth
                             // Removed min - let browser choose closest supported resolution
                         },
                         height: {
-                            ideal: OPTIMIZATION_CONFIG.maxVideoHeight,
-                            max: OPTIMIZATION_CONFIG.maxVideoHeight
+                            ideal: maxHeight,
+                            max: maxHeight
                             // Removed min - let browser choose closest supported resolution
                         },
                         frameRate: {
@@ -294,13 +307,16 @@
                     if (facingMode) {
                         constraints.video.facingMode = facingMode;
                     }
+                    
+                    console.log(`📹 Camera: ${isSelfieCapture ? 'SELFIE' : 'DOCUMENT'} mode - ${maxWidth}x${maxHeight}`);
                 } else if (videoConstraints === true) {
-                    // If just "true", convert to object with constraints
+                    // If just "true", default to selfie quality (better safe than sorry)
                     constraints.video = {
-                        width: { ideal: OPTIMIZATION_CONFIG.maxVideoWidth, max: OPTIMIZATION_CONFIG.maxVideoWidth },
-                        height: { ideal: OPTIMIZATION_CONFIG.maxVideoHeight, max: OPTIMIZATION_CONFIG.maxVideoHeight },
+                        width: { ideal: OPTIMIZATION_CONFIG.maxVideoWidthSelfie, max: OPTIMIZATION_CONFIG.maxVideoWidthSelfie },
+                        height: { ideal: OPTIMIZATION_CONFIG.maxVideoHeightSelfie, max: OPTIMIZATION_CONFIG.maxVideoHeightSelfie },
                         frameRate: { ideal: OPTIMIZATION_CONFIG.maxFrameRate, max: OPTIMIZATION_CONFIG.maxFrameRate, min: 10 }
                     };
+                    console.log('📹 Camera: Default mode (assuming selfie) - 1280x720');
                 }
                 
                 console.log('🎥 Intercepted getUserMedia with ULTRA-optimized constraints:', JSON.stringify(constraints, null, 2));
