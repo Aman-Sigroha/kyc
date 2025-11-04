@@ -33,7 +33,7 @@ models:
   face_recognition:
     name: "insightface"
     model_name: "buffalo_l"  # buffalo_l (accurate) or buffalo_s (faster)
-    similarity_threshold: 0.2  # 0.3=lenient, 0.35=more lenient, 0.4=balanced, 0.5=strict
+    similarity_threshold: 0.12  # 0.12=very lenient (for legitimate matches), 0.15=lenient, 0.2=moderate, 0.3=strict
   
   # EasyOCR Text Extraction
   ocr:
