@@ -12,7 +12,9 @@ COPY liveness.css /usr/share/nginx/html/
 
 # Create nginx config template for SPA routing
 # Railway sets PORT environment variable, we need to use it
-RUN echo 'server {' > /etc/nginx/templates/default.conf.template && \
+# First create the templates directory
+RUN mkdir -p /etc/nginx/templates && \
+    echo 'server {' > /etc/nginx/templates/default.conf.template && \
     echo '    listen ${PORT} default_server;' >> /etc/nginx/templates/default.conf.template && \
     echo '    listen [::]:${PORT} default_server;' >> /etc/nginx/templates/default.conf.template && \
     echo '    server_name _;' >> /etc/nginx/templates/default.conf.template && \
