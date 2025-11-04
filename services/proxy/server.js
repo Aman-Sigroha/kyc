@@ -194,17 +194,28 @@ app.post('/v2/enduser/verify', async (req, res) => {
         } else {
           console.log('❌ Verification REJECTED - Face matching below threshold');
           
-          // Get the face match score from the response to provide context
+          // Get the face match details from the response
           const faceMatchScore = mlResponse.data.face_match_score || mlResponse.data.face_verification_details?.confidence || 0;
+          const cosineSimilarity = mlResponse.data.face_verification_details?.similarity_metrics?.cosine_similarity || 0;
           const threshold = mlResponse.data.face_verification_details?.threshold_used || 0.2;
           
-          // Clear rejection message for frontend
-          response.message = `Unsuccessful - Face matching score (${(faceMatchScore * 100).toFixed(1)}%) is below the required threshold (${(threshold * 100).toFixed(1)}%). Please try again with better lighting and ensure your face is clearly visible.`;
+          // Log detailed comparison for debugging
+          console.log('📊 Face Matching Details:');
+          console.log(`  - cosine_similarity: ${(cosineSimilarity * 100).toFixed(1)}%`);
+          console.log(`  - face_match_score (normalized): ${(faceMatchScore * 100).toFixed(1)}%`);
+          console.log(`  - threshold_used: ${(threshold * 100).toFixed(1)}%`);
+          console.log(`  - Verification uses: cosine_similarity (${(cosineSimilarity * 100).toFixed(1)}%) >= threshold (${(threshold * 100).toFixed(1)}%)`);
+          console.log(`  - Result: ${cosineSimilarity >= threshold ? 'PASS' : 'FAIL'}`);
+          
+          // Clear rejection message for frontend - use cosine similarity for accuracy
+          const actualMatchPercent = (cosineSimilarity * 100).toFixed(1);
+          const thresholdPercent = (threshold * 100).toFixed(1);
+          response.message = `Unsuccessful - Face matching score (${actualMatchPercent}%) is below the required threshold (${thresholdPercent}%). Please try again with better lighting and ensure your face is clearly visible.`;
           response.reason = 'Face verification failed - matching percentage below threshold';
           
           // Return 200 OK but with rejected status - SDK will show rejection screen
           console.log('Returning REJECTED response to frontend (HTTP 200 with status=rejected)');
-          console.log(`Face match: ${(faceMatchScore * 100).toFixed(1)}%, Threshold: ${(threshold * 100).toFixed(1)}%`);
+          console.log(`Face match (cosine): ${actualMatchPercent}%, Threshold: ${thresholdPercent}%`);
           return res.status(200).json(response);
         }
       }
