@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>KYC Verification</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Welcome Screen -->
+        <div id="welcome-screen" class="screen active">
+            <div class="container">
+                <h1>Identity Verification</h1>
+                <p>We need to verify your identity. Please have your ID document ready.</p>
+                <button id="start-btn" class="btn btn-primary">Get Started</button>
+            </div>
+        </div>
+
+        <!-- Document Selection Screen -->
+        <div id="document-selection-screen" class="screen">
+            <div class="container">
+                <h2>Select Document Type</h2>
+                <div class="document-options">
+                    <button class="document-option" data-type="id_card">
+                        <span class="icon">🪪</span>
+                        <span>ID Card</span>
+                    </button>
+                    <button class="document-option" data-type="drivers_license">
+                        <span class="icon">🚗</span>
+                        <span>Driver's License</span>
+                    </button>
+                    <button class="document-option" data-type="passport">
+                        <span class="icon">📘</span>
+                        <span>Passport</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Document Capture Screen (Front) -->
+        <div id="document-front-screen" class="screen">
+            <div class="container">
+                <h2>Capture Front of Document</h2>
+                <p class="instruction">Place your document inside the frame. Make sure it's clearly visible.</p>
+                <div class="camera-container">
+                    <video id="front-video" autoplay playsinline></video>
+                    <canvas id="front-canvas"></canvas>
+                    <div class="capture-frame"></div>
+                </div>
+                <div class="controls">
+                    <button id="capture-front-btn" class="btn btn-primary">Capture</button>
+                    <button id="retake-front-btn" class="btn btn-secondary" style="display:none;">Retake</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Document Review Screen (Front) -->
+        <div id="document-front-review-screen" class="screen">
+            <div class="container">
+                <h2>Review Front Photo</h2>
+                <p class="instruction">Make sure the information is clearly visible.</p>
+                <div class="review-container">
+                    <img id="front-review-img" src="" alt="Document front">
+                </div>
+                <div class="controls">
+                    <button id="approve-front-btn" class="btn btn-primary">Looks Good</button>
+                    <button id="retake-front-review-btn" class="btn btn-secondary">Take Again</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Document Capture Screen (Back) -->
+        <div id="document-back-screen" class="screen">
+            <div class="container">
+                <h2>Capture Back of Document</h2>
+                <p class="instruction">Now capture the back side of your document.</p>
+                <div class="camera-container">
+                    <video id="back-video" autoplay playsinline></video>
+                    <canvas id="back-canvas"></canvas>
+                    <div class="capture-frame"></div>
+                </div>
+                <div class="controls">
+                    <button id="capture-back-btn" class="btn btn-primary">Capture</button>
+                    <button id="retake-back-btn" class="btn btn-secondary" style="display:none;">Retake</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Document Review Screen (Back) -->
+        <div id="document-back-review-screen" class="screen">
+            <div class="container">
+                <h2>Review Back Photo</h2>
+                <p class="instruction">Make sure the information is clearly visible.</p>
+                <div class="review-container">
+                    <img id="back-review-img" src="" alt="Document back">
+                </div>
+                <div class="controls">
+                    <button id="approve-back-btn" class="btn btn-primary">Looks Good</button>
+                    <button id="retake-back-review-btn" class="btn btn-secondary">Take Again</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Selfie Capture Screen -->
+        <div id="selfie-screen" class="screen">
+            <div class="container">
+                <h2>Take a Selfie</h2>
+                <p class="instruction">Position your face inside the frame and look at the camera.</p>
+                <div class="camera-container">
+                    <video id="selfie-video" autoplay playsinline></video>
+                    <canvas id="selfie-canvas"></canvas>
+                    <div class="capture-frame face-frame"></div>
+                </div>
+                <div class="controls">
+                    <button id="capture-selfie-btn" class="btn btn-primary">Capture</button>
+                    <button id="retake-selfie-btn" class="btn btn-secondary" style="display:none;">Retake</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Selfie Review Screen -->
+        <div id="selfie-review-screen" class="screen">
+            <div class="container">
+                <h2>Review Selfie</h2>
+                <p class="instruction">Make sure your face is clearly visible.</p>
+                <div class="review-container">
+                    <img id="selfie-review-img" src="" alt="Selfie">
+                </div>
+                <div class="controls">
+                    <button id="approve-selfie-btn" class="btn btn-primary">Looks Good</button>
+                    <button id="retake-selfie-review-btn" class="btn btn-secondary">Take Again</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="screen">
+            <div class="container">
+                <div class="loader"></div>
+                <h2>Verifying Your Identity</h2>
+                <p>This may take a few seconds...</p>
+            </div>
+        </div>
+
+        <!-- Success Screen -->
+        <div id="success-screen" class="screen">
+            <div class="container">
+                <div class="success-icon">✓</div>
+                <h2>Verification Successful</h2>
+                <p>Your identity has been verified successfully.</p>
+                <button id="done-btn" class="btn btn-primary">Done</button>
+            </div>
+        </div>
+
+        <!-- Error Screen -->
+        <div id="error-screen" class="screen">
+            <div class="container">
+                <div class="error-icon">✗</div>
+                <h2>Verification Failed</h2>
+                <p id="error-message">An error occurred during verification.</p>
+                <button id="retry-btn" class="btn btn-primary">Try Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+

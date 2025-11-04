@@ -1,0 +1,13 @@
+{
+  "name": "custom-kyc-frontend",
+  "version": "1.0.0",
+  "description": "Custom KYC Verification Frontend",
+  "scripts": {
+    "start": "npx http-server -p 3002 -c-1",
+    "dev": "npx http-server -p 3002 -c-1 --cors"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
+
