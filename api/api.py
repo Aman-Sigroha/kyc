@@ -362,6 +362,12 @@ async def verify_kyc(
             
             processing_time_ms = int((time.time() - start_time) * 1000)
             
+            # Log detailed face matching info for debugging
+            logger.info(f"Face Matching Details:")
+            logger.info(f"  - cosine_similarity: {match_result.cosine_similarity:.4f} ({match_result.cosine_similarity*100:.1f}%)")
+            logger.info(f"  - confidence (normalized_score): {match_result.confidence:.4f} ({match_result.confidence*100:.1f}%)")
+            logger.info(f"  - threshold_used: {match_result.threshold_used:.4f} ({match_result.threshold_used*100:.1f}%)")
+            logger.info(f"  - verified: {match_result.verified} (cosine_sim >= threshold: {match_result.cosine_similarity:.4f} >= {match_result.threshold_used:.4f})")
             logger.info(f"✓ Verification complete: {verification_status.value} (confidence: {confidence_score:.2f})")
             
             # Convert OCRResult to OCRData (Pydantic model)
@@ -388,7 +394,7 @@ async def verify_kyc(
             return KYCVerificationResponse(
                 verification_status=verification_status,
                 confidence_score=confidence_score,
-                face_match_score=match_result.confidence,
+                face_match_score=match_result.confidence,  # This is normalized_score, not cosine_similarity
                 ocr_data=ocr_data,
                 processing_time_ms=processing_time_ms,
                 face_verification_details=match_result.to_dict()
