@@ -467,10 +467,106 @@
         
         // Increase document capture frame size for better image quality
         increaseDocumentFrameSize();
+        
+        // Intercept image capture to crop/enhance document area
+        interceptImageCapture();
         console.log('⚙️  Use window.optimizeBallerineCamera() to manually optimize');
     }
     
     // Start IMMEDIATELY - don't wait for DOM
+    // Intercept image capture to crop/enhance document area
+    function interceptImageCapture() {
+        // Intercept canvas.toDataURL to modify captured images
+        const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+        HTMLCanvasElement.prototype.toDataURL = function(type, quality) {
+            // Check if this canvas is from document capture
+            const isDocumentCapture = this.closest('[class*="document"], [data-step*="document"]') !== null ||
+                                     document.querySelector('[data-step*="document"]') !== null;
+            
+            if (isDocumentCapture) {
+                console.log('📸 Intercepting document capture - canvas size:', this.width, 'x', this.height);
+                
+                // Create a new canvas with the full image
+                const newCanvas = document.createElement('canvas');
+                newCanvas.width = this.width;
+                newCanvas.height = this.height;
+                const ctx = newCanvas.getContext('2d');
+                
+                // Draw the original image
+                ctx.drawImage(this, 0, 0);
+                
+                // Try to detect and crop to document area (center 80% of image)
+                // This assumes document is roughly in the center
+                const cropX = this.width * 0.1;
+                const cropY = this.height * 0.15;
+                const cropWidth = this.width * 0.8;
+                const cropHeight = this.height * 0.7;
+                
+                // Create cropped canvas with higher resolution document area
+                const croppedCanvas = document.createElement('canvas');
+                croppedCanvas.width = cropWidth;
+                croppedCanvas.height = cropHeight;
+                const croppedCtx = croppedCanvas.getContext('2d');
+                
+                // Draw the cropped area, scaling up for better quality
+                croppedCtx.imageSmoothingEnabled = true;
+                croppedCtx.imageSmoothingQuality = 'high';
+                croppedCtx.drawImage(
+                    newCanvas,
+                    cropX, cropY, cropWidth, cropHeight,
+                    0, 0, croppedCanvas.width, croppedCanvas.height
+                );
+                
+                console.log('📸 Cropped document area:', cropWidth, 'x', cropHeight);
+                return originalToDataURL.call(croppedCanvas, type, quality);
+            }
+            
+            return originalToDataURL.call(this, type, quality);
+        };
+        
+        // Also intercept toBlob
+        if (HTMLCanvasElement.prototype.toBlob) {
+            const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+            HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
+                const isDocumentCapture = this.closest('[class*="document"], [data-step*="document"]') !== null ||
+                                         document.querySelector('[data-step*="document"]') !== null;
+                
+                if (isDocumentCapture) {
+                    console.log('📸 Intercepting document capture (blob) - canvas size:', this.width, 'x', this.height);
+                    
+                    const newCanvas = document.createElement('canvas');
+                    newCanvas.width = this.width;
+                    newCanvas.height = this.height;
+                    const ctx = newCanvas.getContext('2d');
+                    ctx.drawImage(this, 0, 0);
+                    
+                    const cropX = this.width * 0.1;
+                    const cropY = this.height * 0.15;
+                    const cropWidth = this.width * 0.8;
+                    const cropHeight = this.height * 0.7;
+                    
+                    const croppedCanvas = document.createElement('canvas');
+                    croppedCanvas.width = cropWidth;
+                    croppedCanvas.height = cropHeight;
+                    const croppedCtx = croppedCanvas.getContext('2d');
+                    croppedCtx.imageSmoothingEnabled = true;
+                    croppedCtx.imageSmoothingQuality = 'high';
+                    croppedCtx.drawImage(
+                        newCanvas,
+                        cropX, cropY, cropWidth, cropHeight,
+                        0, 0, croppedCanvas.width, croppedCanvas.height
+                    );
+                    
+                    return originalToBlob.call(croppedCanvas, callback, type, quality);
+                }
+                
+                return originalToBlob.call(this, callback, type, quality);
+            };
+        }
+        
+        console.log('✅ Image capture interception active');
+    }
+    
     // Increase document capture frame size dynamically
     function increaseDocumentFrameSize() {
         // Function to resize frame elements - MORE AGGRESSIVE
@@ -618,7 +714,10 @@
             });
             
             if (shouldResize) {
-                setTimeout(resizeFrames, 100); // Small delay to ensure element is fully rendered
+                // Resize immediately and again after a delay
+                resizeFrames();
+                setTimeout(resizeFrames, 50);
+                setTimeout(resizeFrames, 200);
             }
         });
         
@@ -628,8 +727,8 @@
             subtree: true
         });
         
-        // Also resize periodically to catch dynamic changes
-        setInterval(resizeFrames, 500);
+        // Also resize periodically to catch dynamic changes - MORE FREQUENT
+        setInterval(resizeFrames, 100); // Check every 100ms instead of 500ms
         
         console.log('✅ Document frame resize observer active');
     }
