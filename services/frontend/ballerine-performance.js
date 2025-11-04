@@ -327,21 +327,34 @@
             
             // Optimize the stream immediately when we get it
             promise.then(stream => {
-                console.log('✅ Got video stream, optimizing tracks...');
+                console.log('✅ Got video stream, checking tracks...');
                 const tracks = stream.getVideoTracks();
                 tracks.forEach(track => {
-                    // Try to apply constraints, but don't force if they fail
-                    track.applyConstraints({
-                        width: { ideal: OPTIMIZATION_CONFIG.maxVideoWidth, max: OPTIMIZATION_CONFIG.maxVideoWidth },
-                        height: { ideal: OPTIMIZATION_CONFIG.maxVideoHeight, max: OPTIMIZATION_CONFIG.maxVideoHeight },
-                        frameRate: { ideal: OPTIMIZATION_CONFIG.maxFrameRate, max: OPTIMIZATION_CONFIG.maxFrameRate }
-                    }).then(() => {
+                    try {
                         const settings = track.getSettings();
-                        console.log('✅ Applied constraints to track:', track.label, `(${settings.width}x${settings.height}@${settings.frameRate || '?'}fps)`);
-                    }).catch(err => {
-                        console.warn('⚠️ Could not apply constraints (using default):', err.message);
-                        // Don't fail the stream if constraints can't be applied
-                    });
+                        // Check if this is a selfie (front camera)
+                        const isSelfie = settings.facingMode === 'user' || settings.facingMode === 'front';
+                        const maxWidth = isSelfie ? OPTIMIZATION_CONFIG.maxVideoWidthSelfie : OPTIMIZATION_CONFIG.maxVideoWidth;
+                        const maxHeight = isSelfie ? OPTIMIZATION_CONFIG.maxVideoHeightSelfie : OPTIMIZATION_CONFIG.maxVideoHeight;
+                        
+                        // Only apply constraints for document scanning (not selfies)
+                        if (!isSelfie && (settings.width > OPTIMIZATION_CONFIG.maxVideoWidth || 
+                            settings.height > OPTIMIZATION_CONFIG.maxVideoHeight)) {
+                            track.applyConstraints({
+                                width: { ideal: OPTIMIZATION_CONFIG.maxVideoWidth, max: OPTIMIZATION_CONFIG.maxVideoWidth },
+                                height: { ideal: OPTIMIZATION_CONFIG.maxVideoHeight, max: OPTIMIZATION_CONFIG.maxVideoHeight },
+                                frameRate: { ideal: OPTIMIZATION_CONFIG.maxFrameRate, max: OPTIMIZATION_CONFIG.maxFrameRate }
+                            }).then(() => {
+                                console.log('✅ Applied constraints to track (document mode):', track.label, `(${settings.width}x${settings.height}@${settings.frameRate || '?'}fps)`);
+                            }).catch(err => {
+                                console.warn('⚠️ Could not apply constraints (using default):', err.message);
+                            });
+                        } else if (isSelfie) {
+                            console.log(`✅ Selfie track - allowing high resolution: ${settings.width}x${settings.height}@${settings.frameRate || '?'}fps`);
+                        }
+                    } catch (err) {
+                        console.warn('Error checking track:', err);
+                    }
                 });
                 
                 // Also optimize video elements after a short delay (they might not exist yet)
