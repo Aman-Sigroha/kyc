@@ -51,6 +51,12 @@ class EnvironmentSettings(BaseSettings):
     # Models
     USE_GPU: bool = Field(default=False, description="Use GPU for model inference")
     
+    # PaddleOCR Settings (NEW)
+    PADDLEOCR_LANG: Optional[str] = Field(
+        default=None,
+        description="Primary PaddleOCR language: en, es, german, french, portuguese"
+    )
+    
     # Storage (if using S3)
     S3_BUCKET: Optional[str] = Field(default=None)
     AWS_ACCESS_KEY_ID: Optional[str] = Field(default=None)
@@ -105,6 +111,24 @@ class Config:
         
         if self.env.S3_BUCKET:
             merged["storage"]["s3_bucket"] = self.env.S3_BUCKET
+        
+        # Override PaddleOCR language if specified
+        if self.env.PADDLEOCR_LANG:
+            if "models" not in merged:
+                merged["models"] = {}
+            if "ocr" not in merged["models"]:
+                merged["models"]["ocr"] = {}
+            
+            # Convert language code
+            lang_map = {
+                "en": "en",
+                "es": "es",
+                "de": "german",
+                "pt": "portuguese",
+                "fr": "french"
+            }
+            primary_lang = lang_map.get(self.env.PADDLEOCR_LANG[:2], "en")
+            merged["models"]["ocr"]["languages"] = [primary_lang]
         
         # Liveness security override
         if self.env.LIVENESS_HMAC_SECRET:

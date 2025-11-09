@@ -149,6 +149,16 @@
                 <div class="success-icon">✓</div>
                 <h2>Verification Successful</h2>
                 <p>Your identity has been verified successfully.</p>
+                <div id="verification-details" class="verification-details" style="display:none;">
+                    <div class="detail-item">
+                        <span class="detail-label">Face Match Score:</span>
+                        <span id="face-match-score" class="detail-value">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Confidence Score:</span>
+                        <span id="confidence-score" class="detail-value">-</span>
+                    </div>
+                </div>
                 <button id="done-btn" class="btn btn-primary">Done</button>
             </div>
         </div>
@@ -159,6 +169,16 @@
                 <div class="error-icon">✗</div>
                 <h2>Verification Failed</h2>
                 <p id="error-message">An error occurred during verification.</p>
+                <div id="error-details" class="verification-details" style="display:none;">
+                    <div class="detail-item">
+                        <span class="detail-label">Face Match Score:</span>
+                        <span id="error-face-match-score" class="detail-value">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Threshold:</span>
+                        <span id="error-threshold" class="detail-value">-</span>
+                    </div>
+                </div>
                 <button id="retry-btn" class="btn btn-primary">Try Again</button>
             </div>
         </div>

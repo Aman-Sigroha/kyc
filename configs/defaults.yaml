@@ -35,12 +35,17 @@ models:
     model_name: "buffalo_l"  # buffalo_l (accurate) or buffalo_s (faster)
     similarity_threshold: 0.30  # 0.12=very lenient, 0.15=lenient, 0.2=moderate, 0.3=strict (current)
   
-  # EasyOCR Text Extraction
+  # PaddleOCR Text Extraction (UPDATED)
   ocr:
-    name: "easyocr"
-    languages: ["en", "de", "es", "pt"]  # English, German, Spanish, Portuguese
+    name: "paddleocr"
+    languages: ["en", "de", "es", "pt", "fr"]  # English, German, Spanish, Portuguese, French
     confidence_threshold: 0.3
     gpu: false  # Set true if GPU available
+    # PaddleOCR-specific settings
+    detection_threshold: 0.2  # Lower = more sensitive (better for watermarks)
+    recognition_batch_size: 6
+    use_angle_classification: true  # Auto-rotate text
+    use_space_char: true  # Preserve spaces in text
 
 # File upload settings
 upload:

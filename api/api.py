@@ -267,7 +267,7 @@ async def health_check():
     # Check OCR extractor
     models_status["ocr_extractor"] = ModelStatus(
         loaded=ocr_extractor is not None,
-        name="easyocr",
+        name="paddleocr",
         error=ml_import_error if ocr_extractor is None else None
     )
     

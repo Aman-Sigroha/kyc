@@ -10,6 +10,7 @@ class KYCFlow {
         };
         this.currentStream = null;
         this.backendUrl = this.detectBackendUrl();
+        this.verificationDetails = null;
         
         this.initialize();
     }
@@ -266,6 +267,16 @@ class KYCFlow {
             const data = await response.json();
             console.log('📥 Backend response data:', data);
 
+            // Store verification details for display
+            this.verificationDetails = {
+                faceMatchScore: data.face_match_score || data.face_verification_details?.confidence || null,
+                cosineSimilarity: data.face_verification_details?.similarity_metrics?.cosine_similarity || null,
+                confidenceScore: data.confidence_score || null,
+                threshold: data.face_verification_details?.threshold_used || null
+            };
+
+            console.log('📊 Verification details:', this.verificationDetails);
+
             // Check if liveness is required (only if verification is approved/pending)
             const livenessCompleted = sessionStorage.getItem('liveness_completed') === 'true';
             const isApproved = data.status === 'approved' || data.status === 'verified' || data.status === 'pending';
@@ -284,14 +295,14 @@ class KYCFlow {
 
             // Handle results
             if (data.status === 'approved' || data.status === 'verified') {
-                this.showScreen('success-screen');
+                this.showSuccess(data);
             } else if (data.status === 'rejected' || data.status === 'failed') {
-                this.showError(data.message || 'Verification failed. Please try again.');
+                this.showError(data.message || 'Verification failed. Please try again.', data);
             } else if (data.status === 'pending' && livenessCompleted) {
                 // Pending but liveness done - show success
-                this.showScreen('success-screen');
+                this.showSuccess(data);
             } else {
-                this.showError('Unexpected response from server.');
+                this.showError('Unexpected response from server.', data);
             }
         } catch (error) {
             console.error('❌ Verification error:', error);
@@ -299,8 +310,63 @@ class KYCFlow {
         }
     }
 
-    showError(message) {
+    showSuccess(data) {
+        this.showScreen('success-screen');
+        
+        // Display verification details
+        const detailsContainer = document.getElementById('verification-details');
+        const faceMatchScoreEl = document.getElementById('face-match-score');
+        const confidenceScoreEl = document.getElementById('confidence-score');
+        
+        if (this.verificationDetails.faceMatchScore !== null) {
+            detailsContainer.style.display = 'block';
+            
+            // Show face match score (prefer cosine similarity if available, otherwise normalized score)
+            const matchScore = this.verificationDetails.cosineSimilarity !== null 
+                ? this.verificationDetails.cosineSimilarity 
+                : this.verificationDetails.faceMatchScore;
+            
+            faceMatchScoreEl.textContent = `${(matchScore * 100).toFixed(1)}%`;
+            
+            // Show confidence score
+            if (this.verificationDetails.confidenceScore !== null) {
+                confidenceScoreEl.textContent = `${(this.verificationDetails.confidenceScore * 100).toFixed(1)}%`;
+            } else {
+                confidenceScoreEl.textContent = 'N/A';
+            }
+        } else {
+            detailsContainer.style.display = 'none';
+        }
+    }
+
+    showError(message, data = null) {
         document.getElementById('error-message').textContent = message;
+        
+        // Display error details if available
+        const errorDetailsContainer = document.getElementById('error-details');
+        const errorFaceMatchScoreEl = document.getElementById('error-face-match-score');
+        const errorThresholdEl = document.getElementById('error-threshold');
+        
+        if (data && this.verificationDetails.faceMatchScore !== null) {
+            errorDetailsContainer.style.display = 'block';
+            
+            // Show face match score
+            const matchScore = this.verificationDetails.cosineSimilarity !== null 
+                ? this.verificationDetails.cosineSimilarity 
+                : this.verificationDetails.faceMatchScore;
+            
+            errorFaceMatchScoreEl.textContent = `${(matchScore * 100).toFixed(1)}%`;
+            
+            // Show threshold
+            if (this.verificationDetails.threshold !== null) {
+                errorThresholdEl.textContent = `${(this.verificationDetails.threshold * 100).toFixed(1)}%`;
+            } else {
+                errorThresholdEl.textContent = 'N/A';
+            }
+        } else {
+            errorDetailsContainer.style.display = 'none';
+        }
+        
         this.showScreen('error-screen');
     }
 

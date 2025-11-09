@@ -10,14 +10,15 @@ Pillow==10.1.0
 numpy==1.26.2
 opencv-python-headless==4.8.1.78
 
-# PyTorch CPU-only (Python 3.9 compatible)
-torch==2.1.0+cpu
-torchvision==0.16.0+cpu
+# PyTorch CPU-only (Python 3.10+ compatible)
+torch==2.2.0+cpu
+torchvision==0.17.0+cpu
 
 # ML packages (Python 3.9 compatible - older builds may avoid execstack)
 insightface==0.7.3
 onnxruntime==1.12.1  # Older stable version for Python 3.9
-easyocr==1.7.1
+paddlepaddle>=3.0.0  # Required by PaddleOCR
+paddleocr>=2.7.0
 
 # Config & utilities
 PyYAML==6.0.1

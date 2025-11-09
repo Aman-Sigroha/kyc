@@ -206,7 +206,7 @@ class HealthCheckResponse(BaseModel):
                 "models": {
                     "face_detector": {"loaded": True, "name": "yunet", "error": None},
                     "face_matcher": {"loaded": True, "name": "insightface", "error": None},
-                    "ocr_extractor": {"loaded": True, "name": "easyocr", "error": None}
+                    "ocr_extractor": {"loaded": True, "name": "paddleocr", "error": None}
                 },
                 "timestamp": "2024-10-11T10:30:00Z"
             }

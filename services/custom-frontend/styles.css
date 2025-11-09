@@ -246,6 +246,43 @@ canvas {
     color: #dc3545;
 }
 
+/* Verification Details */
+.verification-details {
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+    border: 1px solid #e0e0e0;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.detail-item:last-child {
+    border-bottom: none;
+}
+
+.detail-label {
+    font-weight: 600;
+    color: #666;
+    font-size: 14px;
+}
+
+.detail-value {
+    font-weight: 700;
+    color: #1F9F31;
+    font-size: 16px;
+}
+
+#error-screen .detail-value {
+    color: #dc3545;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     .container {
