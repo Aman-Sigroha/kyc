@@ -1,4 +1,4 @@
-# Use Python 3.9 - Updated with PaddleOCR (Nov 2025)
+# Use Python 3.9 - Updated with PaddleOCR and Multi-Challenge Liveness (Nov 2025)
 FROM python:3.9-slim
 
 # Set working directory
