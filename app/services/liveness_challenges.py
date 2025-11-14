@@ -42,48 +42,82 @@ class ChallengeStatus(str, Enum):
 
 
 class LivenessChallenge:
-    """Represents a single liveness challenge."""
+    """Represents a liveness challenge session (can contain multiple tasks)."""
     
     def __init__(
         self,
         challenge_id: str,
-        challenge_type: ChallengeType,
-        question_text: str,
-        timestamp: float,
-        nonce: str,
+        challenge_type: ChallengeType = None,  # For backward compatibility
+        question_text: str = None,  # For backward compatibility
+        challenge_types: List[ChallengeType] = None,  # NEW: Multiple challenges
+        question_texts: List[str] = None,  # NEW: Multiple questions
+        timestamp: float = None,
+        nonce: str = None,
         signature: Optional[str] = None,
         expires_in: int = 30  # seconds
     ):
         self.challenge_id = challenge_id
-        self.challenge_type = challenge_type
-        self.question_text = question_text
-        self.timestamp = timestamp
-        self.nonce = nonce
+        self.timestamp = timestamp if timestamp is not None else time.time()
+        self.nonce = nonce if nonce is not None else uuid.uuid4().hex
         self.signature = signature
-        self.expires_at = timestamp + expires_in
+        self.expires_at = self.timestamp + expires_in
         self.status = ChallengeStatus.PENDING
+        
+        # Support both single and multiple challenges
+        if challenge_types is not None and question_texts is not None:
+            # Multi-challenge mode
+            self.challenge_types = challenge_types
+            self.question_texts = question_texts
+            # For backward compatibility
+            self.challenge_type = challenge_types[0] if challenge_types else None
+            self.question_text = question_texts[0] if question_texts else ""
+        else:
+            # Single challenge mode (backward compatibility)
+            self.challenge_type = challenge_type
+            self.question_text = question_text
+            self.challenge_types = [challenge_type] if challenge_type else []
+            self.question_texts = [question_text] if question_text else []
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert challenge to dictionary for API response."""
-        return {
-            "challenge_id": self.challenge_id,
-            "challenge_type": self.challenge_type.value,
-            "question": self.question_text,
-            "instruction": self._get_instruction(),
-            "timestamp": self.timestamp,
-            "expires_at": self.expires_at,
-            "nonce": self.nonce,
-            "signature": self.signature
-        }
+        # Multi-challenge response
+        if len(self.challenge_types) > 1:
+            return {
+                "challenge_id": self.challenge_id,
+                "challenge_types": [ct.value for ct in self.challenge_types],
+                "questions": self.question_texts,
+                "instructions": [self._get_instruction(ct) for ct in self.challenge_types],
+                "timestamp": self.timestamp,
+                "expires_at": self.expires_at,
+                "nonce": self.nonce,
+                "signature": self.signature,
+                "multi_challenge": True
+            }
+        else:
+            # Single challenge response (backward compatibility)
+            return {
+                "challenge_id": self.challenge_id,
+                "challenge_type": self.challenge_type.value if self.challenge_type else None,
+                "question": self.question_text,
+                "instruction": self._get_instruction(self.challenge_type),
+                "timestamp": self.timestamp,
+                "expires_at": self.expires_at,
+                "nonce": self.nonce,
+                "signature": self.signature,
+                "multi_challenge": False
+            }
     
-    def _get_instruction(self) -> str:
+    def _get_instruction(self, challenge_type: ChallengeType = None) -> str:
         """Get user-friendly instruction text."""
+        if challenge_type is None:
+            challenge_type = self.challenge_type
+        
         instructions = {
             ChallengeType.BLINK: "Blink your eyes once",
             ChallengeType.TURN_LEFT: "Turn your face to the left",
             ChallengeType.TURN_RIGHT: "Turn your face to the right"
         }
-        return instructions.get(self.challenge_type, self.question_text)
+        return instructions.get(challenge_type, self.question_text if hasattr(self, 'question_text') else "")
     
     def is_expired(self) -> bool:
         """Check if challenge has expired."""
@@ -99,7 +133,9 @@ class LivenessChallenge:
     
     def _generate_signature(self, secret_key: str) -> str:
         """Generate HMAC signature for challenge."""
-        message = f"{self.challenge_id}:{self.challenge_type.value}:{self.timestamp}:{self.nonce}"
+        # Include all challenge types in signature
+        challenge_str = ",".join([ct.value for ct in self.challenge_types])
+        message = f"{self.challenge_id}:{challenge_str}:{self.timestamp}:{self.nonce}"
         signature = hmac.new(
             secret_key.encode('utf-8'),
             message.encode('utf-8'),
@@ -149,39 +185,58 @@ class ChallengeGenerator:
         
         logger.info(f"ChallengeGenerator initialized (expires_in: {expires_in}s)")
     
-    def generate_challenge(self, challenge_type: Optional[ChallengeType] = None) -> LivenessChallenge:
+    def generate_challenge(self, challenge_type: Optional[ChallengeType] = None, num_challenges: int = 2) -> LivenessChallenge:
         """
-        Generate a new liveness challenge.
+        Generate a new liveness challenge (single or multi-challenge).
         
         Args:
-            challenge_type: Specific challenge type, or None for random
+            challenge_type: Specific challenge type for single challenge, or None for random
+            num_challenges: Number of challenges to generate (default: 2 for multi-challenge)
         
         Returns:
             LivenessChallenge object
         """
-        if challenge_type is None:
-            challenge_type = random.choice(self.CHALLENGE_TYPES)
-        
         challenge_id = str(uuid.uuid4())
         timestamp = time.time()
         nonce = uuid.uuid4().hex
         
-        challenge = LivenessChallenge(
-            challenge_id=challenge_id,
-            challenge_type=challenge_type,
-            question_text=self.QUESTION_TEXTS[challenge_type],
-            timestamp=timestamp,
-            nonce=nonce,
-            expires_in=self.expires_in
-        )
+        # Multi-challenge mode (default)
+        if num_challenges > 1:
+            # Select N random unique challenge types
+            selected_types = random.sample(self.CHALLENGE_TYPES, min(num_challenges, len(self.CHALLENGE_TYPES)))
+            question_texts = [self.QUESTION_TEXTS[ct] for ct in selected_types]
+            
+            challenge = LivenessChallenge(
+                challenge_id=challenge_id,
+                challenge_types=selected_types,
+                question_texts=question_texts,
+                timestamp=timestamp,
+                nonce=nonce,
+                expires_in=self.expires_in
+            )
+            
+            logger.info(f"Generated multi-challenge: {[ct.value for ct in selected_types]} (ID: {challenge_id})")
+        else:
+            # Single challenge mode (backward compatibility)
+            if challenge_type is None:
+                challenge_type = random.choice(self.CHALLENGE_TYPES)
+            
+            challenge = LivenessChallenge(
+                challenge_id=challenge_id,
+                challenge_type=challenge_type,
+                question_text=self.QUESTION_TEXTS[challenge_type],
+                timestamp=timestamp,
+                nonce=nonce,
+                expires_in=self.expires_in
+            )
+            
+            logger.info(f"Generated challenge: {challenge_type.value} (ID: {challenge_id})")
         
         # Generate signature
         challenge.signature = challenge._generate_signature(self.secret_key)
         
         # Store for validation
         self._active_challenges[challenge_id] = challenge
-        
-        logger.info(f"Generated challenge: {challenge_type.value} (ID: {challenge_id})")
         
         return challenge
     
@@ -256,6 +311,7 @@ class ChallengeGenerator:
             detection_results: Dictionary with:
                 - blinks: int (number of blinks detected)
                 - orientation: str ('left', 'right', or None)
+                - orientations: List[str] (all orientations detected in sequence)
                 - face_detected: bool
         
         Returns:
@@ -270,12 +326,25 @@ class ChallengeGenerator:
             self._active_challenges.pop(challenge_id, None)
             return ChallengeStatus.EXPIRED, "Challenge expired"
         
+        # Multi-challenge validation
+        if len(challenge.challenge_types) > 1:
+            return self._validate_multi_challenge(challenge, detection_results)
+        
+        # Single challenge validation (backward compatibility)
+        return self._validate_single_challenge(challenge, detection_results)
+    
+    def _validate_single_challenge(
+        self,
+        challenge: LivenessChallenge,
+        detection_results: Dict[str, Any]
+    ) -> Tuple[ChallengeStatus, Optional[str]]:
+        """Validate a single challenge."""
         # Validate based on challenge type
         if challenge.challenge_type == ChallengeType.BLINK:
             blinks = detection_results.get("blinks", 0)
             if blinks >= 1:
                 challenge.status = ChallengeStatus.PASS
-                self._active_challenges.pop(challenge_id, None)
+                self._active_challenges.pop(challenge.challenge_id, None)
                 return ChallengeStatus.PASS, "Blink detected successfully"
             else:
                 return ChallengeStatus.FAIL, "No blink detected"
@@ -284,7 +353,7 @@ class ChallengeGenerator:
             orientation = detection_results.get("orientation")
             if orientation == "left":
                 challenge.status = ChallengeStatus.PASS
-                self._active_challenges.pop(challenge_id, None)
+                self._active_challenges.pop(challenge.challenge_id, None)
                 return ChallengeStatus.PASS, "Left orientation detected"
             else:
                 return ChallengeStatus.FAIL, f"Expected left, got {orientation}"
@@ -293,12 +362,68 @@ class ChallengeGenerator:
             orientation = detection_results.get("orientation")
             if orientation == "right":
                 challenge.status = ChallengeStatus.PASS
-                self._active_challenges.pop(challenge_id, None)
+                self._active_challenges.pop(challenge.challenge_id, None)
                 return ChallengeStatus.PASS, "Right orientation detected"
             else:
                 return ChallengeStatus.FAIL, f"Expected right, got {orientation}"
         
         return ChallengeStatus.INVALID, "Unknown challenge type"
+    
+    def _validate_multi_challenge(
+        self,
+        challenge: LivenessChallenge,
+        detection_results: Dict[str, Any]
+    ) -> Tuple[ChallengeStatus, Optional[str]]:
+        """
+        Validate multiple challenges completed in a single video.
+        All challenges must be completed successfully.
+        """
+        blinks = detection_results.get("blinks", 0)
+        orientations = detection_results.get("orientations", [])
+        
+        # Track which challenges were completed
+        completed_challenges = []
+        failed_challenges = []
+        
+        for challenge_type in challenge.challenge_types:
+            if challenge_type == ChallengeType.BLINK:
+                if blinks >= 1:
+                    completed_challenges.append("blink")
+                    logger.info(f"✓ Blink challenge completed ({blinks} blinks detected)")
+                else:
+                    failed_challenges.append("blink (no blink detected)")
+                    logger.warning(f"✗ Blink challenge failed (0 blinks)")
+            
+            elif challenge_type == ChallengeType.TURN_LEFT:
+                # Check if "left" appears in orientations
+                if "left" in orientations:
+                    completed_challenges.append("turn left")
+                    logger.info(f"✓ Turn left challenge completed")
+                else:
+                    failed_challenges.append("turn left (not detected)")
+                    logger.warning(f"✗ Turn left challenge failed")
+            
+            elif challenge_type == ChallengeType.TURN_RIGHT:
+                # Check if "right" appears in orientations
+                if "right" in orientations:
+                    completed_challenges.append("turn right")
+                    logger.info(f"✓ Turn right challenge completed")
+                else:
+                    failed_challenges.append("turn right (not detected)")
+                    logger.warning(f"✗ Turn right challenge failed")
+        
+        # All challenges must be completed
+        if len(completed_challenges) == len(challenge.challenge_types):
+            challenge.status = ChallengeStatus.PASS
+            self._active_challenges.pop(challenge.challenge_id, None)
+            message = f"All challenges completed: {', '.join(completed_challenges)}"
+            logger.info(f"✅ Multi-challenge PASSED: {message}")
+            return ChallengeStatus.PASS, message
+        else:
+            # Some challenges failed
+            message = f"Completed: {', '.join(completed_challenges) if completed_challenges else 'none'}. Failed: {', '.join(failed_challenges)}"
+            logger.warning(f"❌ Multi-challenge FAILED: {message}")
+            return ChallengeStatus.FAIL, message
     
     def cleanup_expired(self) -> int:
         """

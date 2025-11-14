@@ -6,7 +6,7 @@ Added confidence_score field as required by frontend.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from enum import Enum
 
@@ -234,11 +234,20 @@ class ChallengeStatus(str, Enum):
 
 
 class ChallengeResponse(BaseModel):
-    """Liveness challenge generation response."""
+    """Liveness challenge generation response (supports single or multi-challenge)."""
     challenge_id: str = Field(description="Unique challenge identifier")
-    challenge_type: ChallengeType = Field(description="Type of challenge")
-    question: str = Field(description="Challenge question text")
-    instruction: str = Field(description="User-friendly instruction")
+    multi_challenge: bool = Field(default=False, description="Whether this is a multi-challenge session")
+    
+    # Single challenge fields (for backward compatibility)
+    challenge_type: Optional[ChallengeType] = Field(default=None, description="Type of challenge (single mode)")
+    question: Optional[str] = Field(default=None, description="Challenge question text (single mode)")
+    instruction: Optional[str] = Field(default=None, description="User-friendly instruction (single mode)")
+    
+    # Multi-challenge fields
+    challenge_types: Optional[List[ChallengeType]] = Field(default=None, description="List of challenge types (multi mode)")
+    questions: Optional[List[str]] = Field(default=None, description="List of challenge questions (multi mode)")
+    instructions: Optional[List[str]] = Field(default=None, description="List of user-friendly instructions (multi mode)")
+    
     timestamp: float = Field(description="Challenge creation timestamp")
     expires_at: float = Field(description="Challenge expiration timestamp")
     nonce: str = Field(description="Nonce for replay protection")
@@ -248,9 +257,10 @@ class ChallengeResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "challenge_id": "550e8400-e29b-41d4-a716-446655440000",
-                "challenge_type": "blink",
-                "question": "blink eyes",
-                "instruction": "Blink your eyes once",
+                "multi_challenge": True,
+                "challenge_types": ["blink", "turn_left"],
+                "questions": ["blink eyes", "turn face left"],
+                "instructions": ["Blink your eyes once", "Turn your face to the left"],
                 "timestamp": 1697022600.0,
                 "expires_at": 1697022630.0,
                 "nonce": "a1b2c3d4e5f6",
@@ -296,13 +306,14 @@ class LivenessVerificationResponse(BaseModel):
             "example": {
                 "challenge_id": "550e8400-e29b-41d4-a716-446655440000",
                 "status": "pass",
-                "message": "Blink detected successfully",
+                "message": "All challenges completed: blink, turn left",
                 "detection_results": {
-                    "blinks": 1,
-                    "orientation": None,
+                    "blinks": 2,
+                    "orientation": "left",
+                    "orientations": ["left", "left", None],
                     "face_detected": True
                 },
-                "processing_time_ms": 450,
+                "processing_time_ms": 1250,
                 "timestamp": "2024-10-11T10:30:00Z"
             }
         }

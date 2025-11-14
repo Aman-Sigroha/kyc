@@ -225,9 +225,11 @@ class LivenessDetector:
         batch_results = self.detect_batch(frames, initial_counter, initial_total)
         
         # Extract detection results for validation
+        # Include both individual orientation and full orientations list for multi-challenge
         detection_results = {
             "blinks": batch_results.get("total_blinks", 0),
             "orientation": self._get_primary_orientation(batch_results.get("orientations", [])),
+            "orientations": batch_results.get("orientations", []),  # Full list for multi-challenge
             "face_detected": batch_results.get("face_detection_ratio", 0.0) > 0.5
         }
         
