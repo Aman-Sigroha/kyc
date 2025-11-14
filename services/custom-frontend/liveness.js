@@ -215,7 +215,14 @@ async function startChallengeCapture() {
         } else {
             clearInterval(countdownInterval);
             countdown.style.display = 'none';
-            instruction.textContent = challenge.instruction;
+            
+            // Show multi-challenge or single challenge instructions
+            if (challenge.multi_challenge && challenge.instructions) {
+                instruction.textContent = challenge.instructions.join(' AND ');
+            } else {
+                instruction.textContent = challenge.instruction || challenge.question || 'Follow the instruction';
+            }
+            
             startFrameCapture();
         }
     }, 1000);
