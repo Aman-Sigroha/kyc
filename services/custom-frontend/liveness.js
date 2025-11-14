@@ -65,7 +65,17 @@ async function initializeLiveness() {
 
         // Show challenge screen
         showScreen(challengeScreen);
-        updateInstruction(challenge.instruction);
+        
+        // SHOW MULTI-CHALLENGE INSTRUCTIONS
+        if (challenge.multi_challenge && challenge.instructions) {
+            const instructionText = challenge.instructions.join(' AND ');
+            console.log('✅ Multi-challenge:', instructionText);
+            updateInstruction(instructionText);
+        } else {
+            const text = challenge.instruction || challenge.question || 'Follow the instruction';
+            console.log('✅ Single challenge:', text);
+            updateInstruction(text);
+        }
         
         // Setup event listeners
         startBtn.addEventListener('click', startCamera);
