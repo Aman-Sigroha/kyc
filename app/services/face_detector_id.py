@@ -54,7 +54,7 @@ class YuNetFaceDetector:
     def __init__(
         self,
         model_path: Optional[str] = None,
-        conf_threshold: float = 0.6,
+        conf_threshold: float = 0.4,
         nms_threshold: float = 0.3
     ):
         """
@@ -62,7 +62,7 @@ class YuNetFaceDetector:
 
         Args:
             model_path: Path to yunet.onnx. If None, uses config.
-            conf_threshold: Confidence threshold (0.0-1.0). Lower = more lenient
+            conf_threshold: Confidence threshold (0.0-1.0). Lower = more lenient (default: 0.4)
             nms_threshold: Non-maximum suppression threshold
         """
         if model_path is None:
@@ -256,7 +256,7 @@ def get_face_detector() -> YuNetFaceDetector:
         with _detector_lock:
             if _detector_instance is None:
                 _detector_instance = YuNetFaceDetector(
-                    conf_threshold=config.get("models", "face_detection", "conf_threshold", default=0.6),
+                    conf_threshold=config.get("models", "face_detection", "conf_threshold", default=0.4),
                     nms_threshold=config.get("models", "face_detection", "nms_threshold", default=0.3)
                 )
                 logger.info("Face detector singleton created")
