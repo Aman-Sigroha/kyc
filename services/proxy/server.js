@@ -46,7 +46,12 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Configure multer for file uploads (memory storage)
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+  limits: { 
+    fileSize: 50 * 1024 * 1024, // 50MB per file
+    fieldSize: 50 * 1024 * 1024, // 50MB for field data (handles base64)
+    fields: 100, // Max number of non-file fields
+    files: 10 // Max number of files
+  }
 });
 
 // Request logging middleware - LOG EVERYTHING (after body parsing)
