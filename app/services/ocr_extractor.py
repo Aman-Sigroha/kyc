@@ -29,6 +29,7 @@ class DocumentType(str, Enum):
     RESIDENCE_PERMIT = "residence_permit"
     VOTER_ID = "voter_id"
     ID_CARD = "id_card"
+    PAN_CARD = "pan_card"
     UNKNOWN = "unknown"
 
 
@@ -217,25 +218,55 @@ class ContextualExtractor:
         # Strategy 1: Look for "Name:" label pattern (highest priority)
         for idx, det in enumerate(detections):
             text = det["text"].strip()
-            # Pattern: "Name: AMAN SIGROHA" or "Name AMAN SIGROHA"
-            name_match = re.search(r'(?:^|\s)(?:Name|NAME|Nombre|NOME|Surname)[:\s×]+([A-Z][A-Z\s]{2,40})', text, re.IGNORECASE)
+            # Skip signature fields
+            if "signature" in text.lower() or ("sign" in text.lower() and len(text) < 20):
+                continue
+            # Pattern: "Name: AMAN SIGROHA" or "Name AMAN SIGROHA" or "41H/Name FIRST NAME MIDDLE NAME"
+            name_match = re.search(r'(?:^|\s)(?:Name|NAME|Nombre|NOME|Surname)[:\s×/]+([A-Z][A-Z\s]{2,40})', text, re.IGNORECASE)
             if name_match:
                 name = name_match.group(1).strip()
+                # Skip placeholder text like "FIRST NAME MIDDLE NAME SURNAME"
+                if any(placeholder in name.upper() for placeholder in 
+                       ["FIRST NAME", "MIDDLE NAME", "SURNAME", "PLACEHOLDER", "SAMPLE", "EXAMPLE"]):
+                    continue
+                # Skip signature fields
+                if "signature" in name.lower() or "sign" in name.lower():
+                    continue
                 # Clean up: remove extra spaces, validate it's a name
                 name = re.sub(r'\s+', ' ', name)
                 if len(name) >= 3 and len(name.split()) <= 5:
                     # Exclude common false positives
-                    if not any(word.lower() in ['department', 'transport', 'issued', 'by', 'licence', 'license'] 
+                    if not any(word.lower() in ['department', 'transport', 'issued', 'by', 'licence', 'license', 'signature', 'sign',
+                                                 'govt', 'government', 'india', 'income', 'tax', 'permanent', 'account', 'number', 'card'] 
                               for word in name.split()):
-                        logger.debug(f"Found name via label pattern: '{name}'")
-                        return name
+                        # Skip government/institutional phrases
+                        if not any(phrase in name.upper() for phrase in ['GOVT OF', 'GOVERNMENT OF', 'INCOME TAX']):
+                            logger.debug(f"Found name via label pattern: '{name}'")
+                            return name
         
         # Strategy 2: Look for name after "Name:" in next detection
         for idx in range(len(detections) - 1):
             text = detections[idx]["text"].strip()
-            if re.search(r'(?:^|\s)(?:Name|NAME|Nombre|NOME)[:\s]*$', text, re.IGNORECASE):
+            # Skip if current text is signature field
+            if "signature" in text.lower():
+                continue
+            # PAN card pattern: "41H/Name" or "Name / नाम" or just "Name"
+            if re.search(r'(?:^|\s)(?:Name|NAME|Nombre|NOME|नाम)[:\s/]*$', text, re.IGNORECASE) or \
+               re.search(r'[0-9A-Z]+/Name', text, re.IGNORECASE):
                 # Next detection might be the name
                 next_text = detections[idx + 1]["text"].strip()
+                # Skip placeholder text like "FIRST NAME MIDDLE NAME SURNAME"
+                if any(placeholder in next_text.upper() for placeholder in 
+                       ["FIRST NAME", "MIDDLE NAME", "SURNAME", "PLACEHOLDER", "SAMPLE", "EXAMPLE"]):
+                    continue
+                # Skip signature fields
+                if "signature" in next_text.lower() or "sign" in next_text.lower():
+                    continue
+                # Skip government/institutional text
+                if any(word in next_text.lower() for word in ['govt', 'government', 'india', 'income', 'tax', 'department', 'permanent', 'account']):
+                    continue
+                if any(phrase in next_text.upper() for phrase in ['GOVT OF', 'GOVERNMENT OF', 'INCOME TAX']):
+                    continue
                 if len(next_text) >= 3 and len(next_text) <= 50:
                     words = next_text.split()
                     if 2 <= len(words) <= 5:
@@ -253,12 +284,23 @@ class ContextualExtractor:
             if ContextualExtractor.is_header_text(text) or ContextualExtractor.is_field_label(text):
                 continue
             
+            # Skip signature fields
+            if "signature" in text.lower() or ("sign" in text.lower() and len(text) < 20):
+                continue
+            
             # Skip if contains department/transport keywords (common false positives)
             if any(word in text.lower() for word in ['department', 'transport', 'issued', 'licence', 'license', 
                                                        'height', 'grondezza', 'stature', 'taille', 'grosse',
                                                        'geschlecht', 'sexe', 'sesso', 'blood', 'group',
                                                        'bern be', 'authority', 'autorite', 'behorde',
-                                                       'lieu', 'origin', 'place', 'helmatort', 'luogo']):
+                                                       'lieu', 'origin', 'place', 'helmatort', 'luogo', 'signature', 'sign',
+                                                       'govt', 'government', 'india', 'income', 'tax', 'permanent', 'account',
+                                                       'number', 'card', 'holders', 'card holders']):
+                continue
+            
+            # Skip government/institutional phrases
+            if any(phrase in text.upper() for phrase in ['GOVT OF', 'GOVERNMENT OF', 'INCOME TAX', 'PERMANENT ACCOUNT',
+                                                          'CARD HOLDERS', 'INCOME TAX DEPARTMENT']):
                 continue
             
             # Skip short or long texts
@@ -526,6 +568,10 @@ class PaddleOCRExtractor:
         """Detect document type."""
         text_upper = text.upper()
         
+        # PAN Card (Indian Permanent Account Number)
+        if any(w in text_upper for w in ["PERMANENT ACCOUNT NUMBER", "PAN", "INCOME TAX DEPARTMENT", "GOVT OF INDIA"]):
+            return DocumentType.PAN_CARD
+        
         if any(w in text_upper for w in ["PASSPORT", "PASSEPORT", "PASSAPORTE", "REISEPASS"]):
             return DocumentType.PASSPORT
         
@@ -543,6 +589,19 @@ class PaddleOCRExtractor:
     def extract_document_number(self, detections: List[Dict], full_text: str, doc_type: DocumentType) -> Optional[str]:
         """Extract document number with country-specific patterns."""
         text_clean = full_text.replace(" ", "").upper()
+        
+        # Indian PAN Card: 5 letters + 4 digits + 1 letter (e.g., AAAAA1234A)
+        if doc_type == DocumentType.PAN_CARD or "PERMANENT ACCOUNT NUMBER" in full_text.upper() or "PAN" in full_text.upper():
+            # Pattern: 5 uppercase letters, 4 digits, 1 uppercase letter
+            match = re.search(r'\b([A-Z]{5}\d{4}[A-Z])\b', full_text.replace(" ", "").upper())
+            if match:
+                return match.group(1)
+            # Also check in individual detections
+            for det in detections:
+                text = det["text"].replace(" ", "").upper()
+                match = re.search(r'\b([A-Z]{5}\d{4}[A-Z])\b', text)
+                if match:
+                    return match.group(1)
         
         # Indian Driving License: DL1 20220166923 or DL-01-2022-0166923
         if "INDIAN" in text_clean or "DRIVING" in text_clean or "LICENCE" in text_clean:
@@ -599,13 +658,13 @@ class PaddleOCRExtractor:
                 
                 # Pattern: 3 letters + alphanumeric
                 match = re.search(r'\b([A-Z]{1,3}\d[A-Z0-9]{4,7})\b', text)
-            if match:
-                return match.group(1)
-        
+                if match:
+                    return match.group(1)
+                
                 # Pattern: Letter + 9 digits
                 match = re.search(r'\b([A-Z]\d{9})\b', text)
-        if match:
-            return match.group(1)
+                if match:
+                    return match.group(1)
         
         return None
 
