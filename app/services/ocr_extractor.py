@@ -342,7 +342,7 @@ class ContextualExtractor:
                     continue
         
         return dates
-    
+
     @staticmethod
     def select_date_by_type(all_dates: List[Tuple[str, datetime, int]], date_type: str) -> Optional[str]:
         """Select appropriate date based on type."""
@@ -424,29 +424,34 @@ class PaddleOCRExtractor:
             elif len(image.shape) == 3 and image.shape[2] == 4:
                 image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
             
-            result = self.ocr.predict(image)
+            # PaddleOCR is callable, not a predict method
+            result = self.ocr(image)
             
             if not result or not isinstance(result, list) or len(result) == 0:
                 return "", [], 0.0
             
-            result_dict = result[0] if isinstance(result[0], dict) else {}
-            
-            if 'rec_texts' not in result_dict:
-                return "", [], 0.0
-            
-            rec_texts = result_dict['rec_texts']
-            rec_scores = result_dict['rec_scores']
-            rec_polys = result_dict.get('rec_polys', [None] * len(rec_texts))
-            
+            # PaddleOCR returns: [[bbox, (text, confidence)], ...]
             detections = []
-            for text, score, poly in zip(rec_texts, rec_scores, rec_polys):
-                detections.append({
-                    "text": text,
-                    "confidence": score,
-                    "bbox": poly
-                })
+            rec_texts = []
+            rec_scores = []
             
-            full_text = "\n".join(rec_texts)
+            for line in result:
+                if line and len(line) >= 2:
+                    bbox = line[0]  # polygon coordinates
+                    text_info = line[1]  # (text, confidence)
+                    if text_info and len(text_info) >= 2:
+                        text = text_info[0]
+                        confidence = text_info[1]
+                        
+                        detections.append({
+                            "text": text,
+                            "confidence": confidence,
+                            "bbox": bbox
+                        })
+                        rec_texts.append(text)
+                        rec_scores.append(confidence)
+            
+            full_text = "\n".join(rec_texts) if rec_texts else ""
             avg_conf = np.mean(rec_scores) if rec_scores else 0.0
             
             logger.info(f"✓ Extracted {len(rec_texts)} text regions (conf: {avg_conf:.1%})")
@@ -534,9 +539,9 @@ class PaddleOCRExtractor:
                 
                 # Pattern: 3 letters + alphanumeric
                 match = re.search(r'\b([A-Z]{1,3}\d[A-Z0-9]{4,7})\b', text)
-                if match:
-                    return match.group(1)
-                
+            if match:
+                return match.group(1)
+        
                 # Pattern: Letter + 9 digits
                 match = re.search(r'\b([A-Z]\d{9})\b', text)
         if match:
@@ -684,7 +689,7 @@ class PaddleOCRExtractor:
                     return full_addr
         
         return None
-    
+
     def extract_gender(self, detections: List[Dict], full_text: str) -> Optional[str]:
         """Extract gender with improved detection."""
         text_upper = full_text.upper()
