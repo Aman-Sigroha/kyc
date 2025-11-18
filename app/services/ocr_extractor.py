@@ -430,30 +430,86 @@ class PaddleOCRExtractor:
             if not result or not isinstance(result, list) or len(result) == 0:
                 return "", [], 0.0
             
-            # PaddleOCR returns nested structure: [[[bbox, (text, confidence)], ...]]
-            # Get the first element which contains all detections
+            # PaddleOCR/PaddleX returns different formats depending on version
+            # Newer versions return OCRResult objects, older versions return lists
             detections = []
             rec_texts = []
             rec_scores = []
             
-            # Handle nested list structure
-            ocr_results = result[0] if result and isinstance(result[0], list) else result
-            
-            for line in ocr_results:
-                if line and isinstance(line, (list, tuple)) and len(line) >= 2:
-                    bbox = line[0]  # polygon coordinates
-                    text_info = line[1]  # (text, confidence)
-                    if text_info and isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
-                        text = text_info[0]
-                        confidence = text_info[1]
-                        
+            # Handle OCRResult object (PaddleX format)
+            if result and len(result) > 0 and hasattr(result[0], '__dict__'):
+                ocr_obj = result[0]
+                
+                # Log available attributes to understand the structure
+                logger.info(f"OCRResult attributes: {dir(ocr_obj)}")
+                
+                # Try different attribute names that PaddleX might use
+                if hasattr(ocr_obj, 'rec_text') and hasattr(ocr_obj, 'rec_score'):
+                    # Single result format
+                    rec_texts = [ocr_obj.rec_text] if ocr_obj.rec_text else []
+                    rec_scores = [ocr_obj.rec_score] if ocr_obj.rec_score else []
+                    rec_polys = [ocr_obj.dt_poly] if hasattr(ocr_obj, 'dt_poly') else [None]
+                    
+                    for text, score, poly in zip(rec_texts, rec_scores, rec_polys):
                         detections.append({
                             "text": text,
-                            "confidence": confidence,
-                            "bbox": bbox
+                            "confidence": score,
+                            "bbox": poly
                         })
-                        rec_texts.append(text)
-                        rec_scores.append(confidence)
+                elif hasattr(ocr_obj, 'rec_texts') and hasattr(ocr_obj, 'rec_scores'):
+                    # Multiple results format
+                    rec_texts = ocr_obj.rec_texts if ocr_obj.rec_texts else []
+                    rec_scores = ocr_obj.rec_scores if ocr_obj.rec_scores else []
+                    rec_polys = ocr_obj.dt_polys if hasattr(ocr_obj, 'dt_polys') else [None] * len(rec_texts)
+                    
+                    for text, score, poly in zip(rec_texts, rec_scores, rec_polys):
+                        detections.append({
+                            "text": text,
+                            "confidence": score,
+                            "bbox": poly
+                        })
+                elif hasattr(ocr_obj, 'json'):
+                    # JSON format - parse the dictionary
+                    json_data = ocr_obj.json if callable(ocr_obj.json) else ocr_obj.json
+                    if isinstance(json_data, dict):
+                        logger.info(f"OCRResult JSON keys: {json_data.keys()}")
+                        logger.info(f"OCRResult JSON full content: {json_data}")
+                        # Extract data from the 'res' key
+                        if 'res' in json_data and isinstance(json_data['res'], dict):
+                            res_dict = json_data['res']
+                            
+                            # PaddleX format: res is a dict with rec_texts, rec_scores, rec_polys
+                            if 'rec_texts' in res_dict and 'rec_scores' in res_dict:
+                                rec_texts = res_dict['rec_texts'] if res_dict['rec_texts'] else []
+                                rec_scores = res_dict['rec_scores'] if res_dict['rec_scores'] else []
+                                rec_polys = res_dict.get('rec_polys', res_dict.get('dt_polys', [None] * len(rec_texts)))
+                                
+                                # Zip them together to create detections
+                                for text, score, poly in zip(rec_texts, rec_scores, rec_polys):
+                                    detections.append({
+                                        "text": text,
+                                        "confidence": score,
+                                        "bbox": poly
+                                    })
+            # Handle nested list structure (older PaddleOCR format)
+            elif result and isinstance(result, list):
+                ocr_results = result[0] if result and isinstance(result[0], list) else result
+                
+                for line in ocr_results:
+                    if line and isinstance(line, (list, tuple)) and len(line) >= 2:
+                        bbox = line[0]  # polygon coordinates
+                        text_info = line[1]  # (text, confidence)
+                        if text_info and isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
+                            text = text_info[0]
+                            confidence = text_info[1]
+                            
+                            detections.append({
+                                "text": text,
+                                "confidence": confidence,
+                                "bbox": bbox
+                            })
+                            rec_texts.append(text)
+                            rec_scores.append(confidence)
             
             full_text = "\n".join(rec_texts) if rec_texts else ""
             avg_conf = np.mean(rec_scores) if rec_scores else 0.0
