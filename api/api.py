@@ -210,17 +210,27 @@ async def read_upload_file(upload_file: UploadFile) -> np.ndarray:
         )
 
 
-def determine_verification_status(face_verified: bool, ocr_confidence: float) -> VerificationStatus:
+def determine_verification_status(face_verified: bool, ocr_confidence: float, face_confidence: float = 0.0) -> VerificationStatus:
     """
-    Determine overall verification status based on face match and OCR confidence.
+    Determine overall verification status.
+    
+    More lenient: If face match is decent (>= 0.45), approve even with low OCR confidence.
+    This handles cases where OCR fails but face matching is reliable.
     """
     if not face_verified:
         return VerificationStatus.REJECTED
     
-    if ocr_confidence < 0.5:
-        return VerificationStatus.PENDING  # Low OCR confidence, manual review
+    # If face match confidence is decent (>= 0.45), approve even if OCR fails
+    # This is more lenient for cases where OCR can't read the document but face match is reliable
+    if face_confidence >= 0.45:
+        return VerificationStatus.APPROVED
     
-    return VerificationStatus.APPROVED
+    # If OCR confidence is decent (>= 0.5), approve regardless of face match score
+    if ocr_confidence >= 0.5:
+        return VerificationStatus.APPROVED
+    
+    # If both are low, pending for manual review
+    return VerificationStatus.PENDING
 
 
 def calculate_confidence_score(
@@ -350,7 +360,8 @@ async def verify_kyc(
             # Determine verification status
             verification_status = determine_verification_status(
                 face_verified=match_result.verified,
-                ocr_confidence=ocr_result.confidence
+                ocr_confidence=ocr_result.confidence,
+                face_confidence=match_result.confidence
             )
             
             # ✅ FIX #2: Calculate overall confidence score for frontend
