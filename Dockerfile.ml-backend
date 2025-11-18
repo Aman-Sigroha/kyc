@@ -17,15 +17,75 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
+# Create pip config with aggressive retry settings for Railway's unstable network
+RUN mkdir -p /root/.pip && \
+    echo "[global]" > /root/.pip/pip.conf && \
+    echo "timeout = 300" >> /root/.pip/pip.conf && \
+    echo "retries = 10" >> /root/.pip/pip.conf && \
+    echo "default-timeout = 300" >> /root/.pip/pip.conf && \
+    echo "[install]" >> /root/.pip/pip.conf && \
+    echo "retries = 10" >> /root/.pip/pip.conf && \
+    echo "timeout = 300" >> /root/.pip/pip.conf
+
 # Upgrade pip first for better reliability
 RUN pip install --upgrade pip setuptools wheel
 
-# Install Python dependencies with increased timeout
-# Railway builds can have network issues, so we increase timeout (default is 15s, we use 300s)
-# pip automatically retries on network errors
-RUN pip install --no-cache-dir \
-    --timeout=300 \
-    -r requirements.txt
+# Install Python dependencies in batches to handle connection resets better
+# Each batch retries up to 3 times with exponential backoff
+
+# Batch 1: Light packages (fast install, less likely to fail)
+RUN for i in 1 2 3; do \
+        pip install --no-cache-dir \
+            fastapi==0.104.1 \
+            uvicorn[standard]==0.24.0 \
+            python-multipart==0.0.6 \
+            pydantic==2.5.0 \
+            pydantic-settings==2.1.0 \
+            PyYAML==6.0.1 \
+            python-dotenv==1.0.0 \
+            aiofiles==23.2.1 \
+            imutils>=0.5.3,<0.6.0 && break || \
+        (echo "Batch 1 attempt $i failed, retrying in $((i * 5)) seconds..." && sleep $((i * 5))); \
+    done
+
+# Batch 2: Medium packages
+RUN for i in 1 2 3; do \
+        pip install --no-cache-dir \
+            Pillow==10.1.0 \
+            numpy==1.26.2 \
+            opencv-python-headless==4.8.1.78 \
+            onnxruntime==1.12.1 && break || \
+        (echo "Batch 2 attempt $i failed, retrying in $((i * 5)) seconds..." && sleep $((i * 5))); \
+    done
+
+# Batch 3: Heavy ML packages - PyTorch (large download ~187MB)
+RUN for i in 1 2 3; do \
+        pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu \
+            torch==2.2.0+cpu \
+            torchvision==0.17.0+cpu && break || \
+        (echo "Batch 3 (PyTorch) attempt $i failed, retrying in $((i * 10)) seconds..." && sleep $((i * 10))); \
+    done
+
+# Batch 4: PaddlePaddle (very large ~189MB, most likely to fail)
+# Longer backoff for this one since it's the biggest download
+RUN for i in 1 2 3 4; do \
+        pip install --no-cache-dir paddlepaddle>=3.0.0 && break || \
+        (echo "Batch 4 (PaddlePaddle) attempt $i failed, retrying in $((i * 15)) seconds..." && sleep $((i * 15))); \
+    done
+
+# Batch 5: PaddleOCR (depends on PaddlePaddle)
+RUN for i in 1 2 3; do \
+        pip install --no-cache-dir paddleocr>=2.7.0 && break || \
+        (echo "Batch 5 (PaddleOCR) attempt $i failed, retrying in $((i * 10)) seconds..." && sleep $((i * 10))); \
+    done
+
+# Batch 6: InsightFace and MediaPipe
+RUN for i in 1 2 3; do \
+        pip install --no-cache-dir \
+            insightface==0.7.3 \
+            mediapipe>=0.10.0,<0.11.0 && break || \
+        (echo "Batch 6 attempt $i failed, retrying in $((i * 10)) seconds..." && sleep $((i * 10))); \
+    done
 
 # CRITICAL FIX: Clear executable stack flag from onnxruntime binaries
 # Railway blocks executable stacks, patchelf clears the PT_GNU_STACK flag
