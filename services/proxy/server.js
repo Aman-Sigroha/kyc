@@ -39,16 +39,16 @@ const corsOptions = {
 // Middleware
 app.use(cors(corsOptions));
 
-// Increase payload limit to handle large image uploads (50MB)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Increase payload limit to handle large image uploads (200MB)
+app.use(express.json({ limit: '200mb' }));
+app.use(express.urlencoded({ limit: '200mb', extended: true }));
 
 // Configure multer for file uploads (memory storage)
 const upload = multer({ 
   storage: multer.memoryStorage(),
   limits: { 
-    fileSize: 50 * 1024 * 1024, // 50MB per file
-    fieldSize: 50 * 1024 * 1024, // 50MB for field data (handles base64)
+    fileSize: 200 * 1024 * 1024, // 200MB per file
+    fieldSize: 200 * 1024 * 1024, // 200MB for field data (handles base64)
     fields: 100, // Max number of non-file fields
     files: 10 // Max number of files
   }

@@ -214,15 +214,15 @@ def determine_verification_status(face_verified: bool, ocr_confidence: float, fa
     """
     Determine overall verification status.
     
-    More lenient: If face match is decent (>= 0.45), approve even with low OCR confidence.
+    More lenient: If face match is decent (>= 0.35), approve even with low OCR confidence.
     This handles cases where OCR fails but face matching is reliable.
     """
     if not face_verified:
         return VerificationStatus.REJECTED
     
-    # If face match confidence is decent (>= 0.45), approve even if OCR fails
+    # If face match confidence is decent (>= 0.35), approve even if OCR fails
     # This is more lenient for cases where OCR can't read the document but face match is reliable
-    if face_confidence >= 0.45:
+    if face_confidence >= 0.35:
         return VerificationStatus.APPROVED
     
     # If OCR confidence is decent (>= 0.5), approve regardless of face match score
