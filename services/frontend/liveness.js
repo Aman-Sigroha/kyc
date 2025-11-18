@@ -65,7 +65,43 @@ async function initializeLiveness() {
 
         // Show challenge screen
         showScreen(challengeScreen);
-        updateInstruction(challenge.instruction);
+        
+        // SHOW CHALLENGE IN THE BIG GREEN BOX
+        console.log('🔍 Looking for main-instruction element...');
+        const mainInstruction = document.getElementById('main-instruction');
+        console.log('main-instruction element:', mainInstruction);
+        
+        if (!mainInstruction) {
+            console.error('❌ main-instruction element NOT FOUND!');
+        }
+        
+        if (challenge.multi_challenge && challenge.instructions) {
+            const instructionText = challenge.instructions.join(' AND ');
+            console.log('📝 Setting text to:', instructionText);
+            
+            if (mainInstruction) {
+                mainInstruction.textContent = instructionText;
+                mainInstruction.innerHTML = `<strong>${instructionText}</strong>`;
+                console.log('✅ SET main-instruction text');
+            }
+            
+            instruction.textContent = instructionText;
+            console.log('✅ SET overlay instruction text');
+        } else {
+            const text = challenge.instruction || challenge.question || 'Follow the instruction';
+            console.log('📝 Setting text to:', text);
+            
+            if (mainInstruction) {
+                mainInstruction.textContent = text;
+                mainInstruction.innerHTML = `<strong>${text}</strong>`;
+                console.log('✅ SET main-instruction text');
+            }
+            
+            instruction.textContent = text;
+            console.log('✅ SET overlay instruction text');
+        }
+        
+        displayChallengeInfo(challenge);
         
         // Setup event listeners
         startBtn.addEventListener('click', startCamera);
@@ -205,7 +241,12 @@ async function startChallengeCapture() {
         } else {
             clearInterval(countdownInterval);
             countdown.style.display = 'none';
-            instruction.textContent = challenge.instruction;
+            // Show combined instruction for multi-challenge
+            if (challenge.multi_challenge && challenge.instructions) {
+                instruction.textContent = challenge.instructions.join(' AND ');
+            } else {
+                instruction.textContent = challenge.instruction;
+            }
             startFrameCapture();
         }
     }, 1000);
@@ -363,9 +404,9 @@ async function resetChallenge() {
     // Generate new challenge
     challenge = await generateChallenge();
     if (challenge) {
-        updateInstruction(challenge.instruction);
+        displayChallengeInfo(challenge);
         startBtn.style.display = 'block';
-        updateStatus('Camera ready. Click "Start Camera" to begin.', 'success');
+        updateStatus('New challenge ready. Click "Start Camera" to begin.', 'success');
         
         // Log challenge expiration time for debugging
         const expiresIn = Math.floor(challenge.expires_at - Date.now() / 1000);
@@ -391,6 +432,70 @@ function stopCamera() {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
     }
+}
+
+// Display challenge information (single or multi-challenge)
+function displayChallengeInfo(challenge) {
+    console.log('=== displayChallengeInfo CALLED ===');
+    console.log('Full challenge object:', JSON.stringify(challenge, null, 2));
+    
+    const challengeList = document.getElementById('challenge-list');
+    const challengeInfo = document.getElementById('challenge-info');
+    
+    if (!challengeList) {
+        console.error('❌ Challenge list element not found!');
+        return;
+    }
+    
+    if (!challengeInfo) {
+        console.error('❌ Challenge info element not found!');
+        return;
+    }
+    
+    console.log('✓ Found challenge-list and challenge-info elements');
+    
+    // Always show the challenge info box
+    challengeInfo.style.display = 'block';
+    challengeInfo.style.visibility = 'visible';
+    
+    // Clear existing content
+    challengeList.innerHTML = '';
+    
+    // Check if multi-challenge
+    if (challenge.multi_challenge && challenge.instructions && challenge.instructions.length > 1) {
+        console.log('📋 Multi-challenge mode with', challenge.instructions.length, 'challenges');
+        
+        // Multi-challenge mode
+        challenge.instructions.forEach((inst, index) => {
+            const li = document.createElement('li');
+            li.textContent = inst;
+            li.style.display = 'flex'; // Ensure it displays
+            challengeList.appendChild(li);
+            console.log(`  ✓ Added challenge ${index + 1}: "${inst}"`);
+        });
+        
+        // Set combined instruction for overlay
+        const combinedInstruction = challenge.instructions.join(' AND ');
+        updateInstruction(combinedInstruction);
+        console.log('📝 Combined instruction:', combinedInstruction);
+    } else {
+        console.log('📋 Single challenge mode');
+        
+        // Single challenge mode (backward compatible)
+        const instruction = challenge.instruction || challenge.question || 'Follow the instruction';
+        const li = document.createElement('li');
+        li.textContent = instruction;
+        li.style.display = 'flex'; // Ensure it displays
+        challengeList.appendChild(li);
+        console.log(`  ✓ Added single challenge: "${instruction}"`);
+        
+        updateInstruction(instruction);
+    }
+    
+    const itemCount = challengeList.children.length;
+    console.log(`✅ Challenge list populated with ${itemCount} item(s)`);
+    console.log('Challenge list HTML:', challengeList.innerHTML);
+    console.log('=== displayChallengeInfo COMPLETE ===\n');
 }
 
 // Update instruction text

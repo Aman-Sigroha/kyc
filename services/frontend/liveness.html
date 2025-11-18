@@ -5,6 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Liveness Check - KYC Verification</title>
     <link rel="stylesheet" href="liveness.css">
+    <style>
+        /* Emergency override to force challenge box visibility */
+        #challenge-info {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: relative !important;
+            z-index: 1 !important;
+            min-height: 100px !important;
+        }
+        
+        #challenge-list {
+            display: block !important;
+            visibility: visible !important;
+        }
+        
+        #challenge-list li {
+            display: flex !important;
+            visibility: visible !important;
+            margin: 8px 0 !important;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -20,6 +42,18 @@
         <div id="challenge-screen" class="screen">
             <div class="challenge-content">
                 <h1>Liveness Check</h1>
+                
+                <!-- BIG VISIBLE INSTRUCTION BOX -->
+                <div id="main-instruction" style="background: #1F9F31; color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; font-size: 18px; font-weight: bold; min-height: 60px;">
+                    Loading challenge...
+                </div>
+                
+                <div id="challenge-info" class="challenge-info" style="display: block;">
+                    <p>Complete the following actions in one take:</p>
+                    <ul id="challenge-list" class="challenge-list">
+                        <!-- Challenges will be populated by JavaScript -->
+                    </ul>
+                </div>
                 <div class="video-container">
                     <video id="video" autoplay playsinline muted></video>
                     <canvas id="canvas" style="display: none;"></canvas>

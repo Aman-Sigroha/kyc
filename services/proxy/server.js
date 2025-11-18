@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const FormData = require('form-data');
+const multer = require('multer');
 const app = express();
 
 // Configuration from environment variables (Railway compatible)
@@ -41,6 +42,12 @@ app.use(cors(corsOptions));
 // Increase payload limit to handle large image uploads (50MB)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Configure multer for file uploads (memory storage)
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
 
 // Request logging middleware - LOG EVERYTHING (after body parsing)
 app.use((req, res, next) => {
@@ -394,25 +401,81 @@ app.get('/v2/clients/:clientId/config', (req, res) => {
 // ============================================
 
 // Proxy to Python ML Backend - KYC Verification with Face Matching
-app.post('/api/v1/kyc/verify', async (req, res) => {
+app.post('/api/v1/kyc/verify', upload.fields([
+  { name: 'id_document', maxCount: 1 },
+  { name: 'id_document_back', maxCount: 1 },
+  { name: 'selfie_image', maxCount: 1 }
+]), async (req, res) => {
   try {
     console.log('Forwarding KYC verification request to Python ML backend...');
+    console.log('Files received:', {
+      id_document: !!req.files?.id_document,
+      id_document_back: !!req.files?.id_document_back,
+      selfie_image: !!req.files?.selfie_image
+    });
     
+    // Create FormData to forward files to ML backend
+    const formData = new FormData();
+    
+    // Add files if they exist
+    if (req.files?.id_document?.[0]) {
+      formData.append('id_document', req.files.id_document[0].buffer, {
+        filename: req.files.id_document[0].originalname || 'id_document.jpg',
+        contentType: req.files.id_document[0].mimetype || 'image/jpeg'
+      });
+    }
+    
+    if (req.files?.id_document_back?.[0]) {
+      formData.append('id_document_back', req.files.id_document_back[0].buffer, {
+        filename: req.files.id_document_back[0].originalname || 'id_document_back.jpg',
+        contentType: req.files.id_document_back[0].mimetype || 'image/jpeg'
+      });
+    }
+    
+    if (req.files?.selfie_image?.[0]) {
+      formData.append('selfie_image', req.files.selfie_image[0].buffer, {
+        filename: req.files.selfie_image[0].originalname || 'selfie.jpg',
+        contentType: req.files.selfie_image[0].mimetype || 'image/jpeg'
+      });
+    }
+    
+    // Validate required files
+    if (!req.files?.id_document?.[0]) {
+      return res.status(400).json({
+        error: 'Missing required file',
+        details: [{ type: 'missing', loc: ['body', 'id_document'] }]
+      });
+    }
+    
+    if (!req.files?.selfie_image?.[0]) {
+      return res.status(400).json({
+        error: 'Missing required file',
+        details: [{ type: 'missing', loc: ['body', 'selfie_image'] }]
+      });
+    }
+    
+    // Forward to ML backend
     const response = await axios.post(
       `${ML_BACKEND_URL}/api/v1/kyc/verify`,
-      req.body,
+      formData,
       {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          ...formData.getHeaders(),
         },
         maxBodyLength: Infinity,
-        maxContentLength: Infinity
+        maxContentLength: Infinity,
+        timeout: 60000 // 60 second timeout
       }
     );
     
+    console.log('✅ ML Backend response received');
     res.json(response.data);
   } catch (error) {
-    console.error('Error calling Python ML backend:', error.message);
+    console.error('❌ Error calling Python ML backend:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     res.status(error.response?.status || 500).json({
       error: 'Failed to process KYC verification',
       details: error.response?.data || error.message

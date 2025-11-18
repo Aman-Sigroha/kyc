@@ -16,7 +16,7 @@ body {
 
 .container {
     width: 100%;
-    max-width: 500px;
+    max-width: 600px;  /* Increased from 500px to accommodate challenge list */
     background: white;
     border-radius: 20px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -72,6 +72,64 @@ body {
     color: #333;
     margin-bottom: 20px;
     font-size: 24px;
+}
+
+.challenge-info {
+    background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+    border: 2px solid #667eea;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.challenge-info p {
+    color: #333;
+    font-size: 16px;
+    margin-bottom: 12px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.challenge-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.challenge-list li {
+    padding: 12px 16px;
+    margin: 8px 0;
+    background: white;
+    border-radius: 8px;
+    color: #333;
+    font-size: 16px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+    border-left: 4px solid #1F9F31;
+    transition: transform 0.2s ease;
+}
+
+.challenge-list li:hover {
+    transform: translateX(5px);
+}
+
+.challenge-list li::before {
+    content: '✓';
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: linear-gradient(135deg, #1F9F31 0%, #15b33a 100%);
+    color: white;
+    border-radius: 50%;
+    margin-right: 12px;
+    font-size: 14px;
+    font-weight: bold;
+    flex-shrink: 0;
 }
 
 .video-container {
@@ -138,12 +196,16 @@ video {
     right: 0;
     text-align: center;
     color: white;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 15px;
-    font-size: 18px;
-    font-weight: 600;
+    background: rgba(0, 0, 0, 0.85);
+    padding: 15px 20px;
+    font-size: 16px;
+    font-weight: 700;
     border-radius: 10px;
     margin: 0 20px;
+    display: block !important;
+    visibility: visible !important;
+    z-index: 100;
+    line-height: 1.4;
 }
 
 .countdown {
