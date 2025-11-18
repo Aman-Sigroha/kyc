@@ -424,22 +424,26 @@ class PaddleOCRExtractor:
             elif len(image.shape) == 3 and image.shape[2] == 4:
                 image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
             
-            # PaddleOCR is callable, not a predict method
-            result = self.ocr(image)
+            # PaddleOCR uses the .ocr() method
+            result = self.ocr.ocr(image)
             
             if not result or not isinstance(result, list) or len(result) == 0:
                 return "", [], 0.0
             
-            # PaddleOCR returns: [[bbox, (text, confidence)], ...]
+            # PaddleOCR returns nested structure: [[[bbox, (text, confidence)], ...]]
+            # Get the first element which contains all detections
             detections = []
             rec_texts = []
             rec_scores = []
             
-            for line in result:
-                if line and len(line) >= 2:
+            # Handle nested list structure
+            ocr_results = result[0] if result and isinstance(result[0], list) else result
+            
+            for line in ocr_results:
+                if line and isinstance(line, (list, tuple)) and len(line) >= 2:
                     bbox = line[0]  # polygon coordinates
                     text_info = line[1]  # (text, confidence)
-                    if text_info and len(text_info) >= 2:
+                    if text_info and isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
                         text = text_info[0]
                         confidence = text_info[1]
                         
