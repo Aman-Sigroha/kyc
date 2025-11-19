@@ -33,7 +33,7 @@ models:
   face_recognition:
     name: "insightface"
     model_name: "buffalo_l"  # buffalo_l (accurate) or buffalo_s (faster)
-    similarity_threshold: 0.30  # 0.12=very lenient, 0.15=lenient, 0.2=moderate, 0.3=strict (current)
+    similarity_threshold: 0.15  # 0.12=very lenient, 0.15=lenient (current), 0.2=moderate, 0.3=strict
   
   # PaddleOCR Text Extraction (UPDATED)
   ocr:
