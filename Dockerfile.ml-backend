@@ -5,9 +5,15 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Install system dependencies + patchelf for patching binaries
+# Added ffmpeg and libsm6 for MediaPipe compatibility
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    ffmpeg \
     gcc \
     g++ \
     patchelf \

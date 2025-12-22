@@ -26,6 +26,9 @@ python-dotenv==1.0.0
 aiofiles==23.2.1
 
 # Liveness detection dependencies
-mediapipe>=0.10.0,<0.11.0
-imutils>=0.5.3,<0.6.0
+# MediaPipe 0.10.9 is stable with Python 3.9 and Railway deployment
+# protobuf version must be compatible with MediaPipe
+protobuf>=3.20.0,<4.0.0
+mediapipe==0.10.9
+imutils==0.5.4
 
