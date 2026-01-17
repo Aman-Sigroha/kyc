@@ -88,23 +88,34 @@ class YuNetFaceDetector:
 
     def _ensure_detector(self, width: int, height: int) -> None:
         """
-        Initialize or reinitialize detector if image size changed.
-        YuNet requires input size at model creation.
+        Initialize or resize detector for image size.
+        Thread-safe implementation for concurrent requests with different image dimensions.
+        Uses setInputSize() to dynamically adjust detector without recreation.
         """
-        if self.detector is None or self._last_size != (width, height):
+        if self.detector is None:
+            # First-time initialization with default size
             try:
                 self.detector = cv2.FaceDetectorYN.create(
                     model=self.model_path,
                     config="",
-                    input_size=(width, height),
+                    input_size=(640, 640),  # Default size, will be adjusted per image
                     score_threshold=self.conf_threshold,
                     nms_threshold=self.nms_threshold,
                     top_k=5000
                 )
-                self._last_size = (width, height)
-                logger.debug(f"Detector initialized for size: {width}x{height}")
+                logger.info(f"YuNet detector created (supports dynamic resizing)")
             except Exception as e:
                 logger.error(f"Failed to initialize detector: {e}")
+                raise
+        
+        # Always set input size for current image (thread-safe, no recreation needed)
+        if self._last_size != (width, height):
+            try:
+                self.detector.setInputSize((width, height))
+                self._last_size = (width, height)
+                logger.debug(f"Detector resized to: {width}x{height}")
+            except Exception as e:
+                logger.error(f"Failed to resize detector: {e}")
                 raise
 
     def detect(
