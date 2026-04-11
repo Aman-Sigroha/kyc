@@ -192,10 +192,23 @@ async def read_upload_file(upload_file: UploadFile) -> np.ndarray:
         
         max_dim = config.get("upload", "image_max_dimension", default=4096)
         h, w = image.shape[:2]
+        
+        # Log image dimensions for debugging
+        logger.info(f"Image uploaded: {w}x{h} pixels, size: {len(content)/1024:.1f}KB")
+        
         if h > max_dim or w > max_dim:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Image too large. Max dimension: {max_dim}px"
+            )
+        
+        # Validate minimum image resolution
+        min_width, min_height = 320, 240
+        if w < min_width or h < min_height:
+            logger.warning(f"Image resolution too low: {w}x{h} (minimum: {min_width}x{min_height})")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image resolution too low ({w}x{h}). Please upload a higher resolution image (minimum {min_width}x{min_height})."
             )
         
         return image
@@ -334,28 +347,55 @@ async def verify_kyc(
             if id_face_result is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="No face detected in ID document"
+                    detail="No face detected in ID document. Please ensure: (1) Face is clearly visible, (2) Image is high resolution (minimum 640x480), (3) Face is not too small or far from camera, (4) Good lighting without glare."
                 )
             
             if selfie_face_result is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="No face detected in selfie image"
+                    detail="No face detected in selfie image. Please ensure: (1) Face is clearly visible and centered, (2) Image is high resolution, (3) Good lighting, (4) Face is not too small."
                 )
             
             # ✅ OPTIMIZATION: Run face matching and OCR in parallel
             logger.info("Running face matching and OCR in parallel...")
-            match_result, ocr_result = await asyncio.gather(
-                asyncio.to_thread(
-                    face_matcher.verify,
-                    id_face_result.face_crop,
-                    selfie_face_result.face_crop
-                ),
-                asyncio.to_thread(
-                    ocr_extractor.extract_structured,
-                    id_image
+            try:
+                match_result, ocr_result = await asyncio.gather(
+                    asyncio.to_thread(
+                        face_matcher.verify,
+                        id_face_result.face_crop,
+                        selfie_face_result.face_crop
+                    ),
+                    asyncio.to_thread(
+                        ocr_extractor.extract_structured,
+                        id_image
+                    ),
+                    return_exceptions=True  # Don't fail entire request if one fails
                 )
-            )
+                
+                # Check if face matching failed
+                if isinstance(match_result, Exception):
+                    logger.error(f"Face matching failed: {match_result}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Face matching failed: {str(match_result)}"
+                    )
+                
+                # Check if OCR failed (PaddlePaddle segfault protection)
+                if isinstance(ocr_result, Exception):
+                    logger.error(f"OCR extraction failed: {ocr_result}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="OCR extraction failed. Please try with a clearer document image or try again."
+                    )
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Parallel processing failed: {e}", exc_info=True)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Processing failed: {str(e)}"
+                )
             
             # Determine verification status
             verification_status = determine_verification_status(
