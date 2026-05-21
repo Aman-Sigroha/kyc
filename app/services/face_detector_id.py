@@ -172,67 +172,67 @@ class YuNetFaceDetector:
                     logger.info(f"  Face {i+1}: size={det.bbox[2]}x{det.bbox[3]}, area={face_area}, conf={det.confidence:.3f}, pos=[{det.bbox[0]},{det.bbox[1]}]")
 
                 if return_largest:
-                # Apply multiple filters to eliminate false positives:
-                # 1. Minimum size: 40x40 pixels (TEMPORARY: Lowered for testing - revert to 50 for production)
-                # 2. Confidence: >= 0.5 (YuNet's default threshold is often too low)
-                # 3. Aspect ratio: between 0.5 and 2.0 (faces are roughly square)
-                min_face_size = 40
-                min_confidence = 0.5
-                min_aspect_ratio = 0.5
-                max_aspect_ratio = 2.0
-                
-                valid_detections = []
-                for det in detections:
-                    width, height = det.bbox[2], det.bbox[3]
-                    aspect_ratio = width / height if height > 0 else 0
+                    # Apply multiple filters to eliminate false positives:
+                    # 1. Minimum size: 40x40 pixels (TEMPORARY: Lowered for testing - revert to 50 for production)
+                    # 2. Confidence: >= 0.5 (YuNet's default threshold is often too low)
+                    # 3. Aspect ratio: between 0.5 and 2.0 (faces are roughly square)
+                    min_face_size = 40
+                    min_confidence = 0.5
+                    min_aspect_ratio = 0.5
+                    max_aspect_ratio = 2.0
                     
-                    # Check all criteria
-                    size_ok = width >= min_face_size and height >= min_face_size
-                    conf_ok = det.confidence >= min_confidence
-                    aspect_ok = min_aspect_ratio <= aspect_ratio <= max_aspect_ratio
+                    valid_detections = []
+                    for det in detections:
+                        width, height = det.bbox[2], det.bbox[3]
+                        aspect_ratio = width / height if height > 0 else 0
+                        
+                        # Check all criteria
+                        size_ok = width >= min_face_size and height >= min_face_size
+                        conf_ok = det.confidence >= min_confidence
+                        aspect_ok = min_aspect_ratio <= aspect_ratio <= max_aspect_ratio
+                        
+                        if size_ok and conf_ok and aspect_ok:
+                            valid_detections.append(det)
+                        else:
+                            # Log why this detection was filtered out
+                            reasons = []
+                            if not size_ok:
+                                reasons.append(f"size={width}x{height}<{min_face_size}")
+                            if not conf_ok:
+                                reasons.append(f"conf={det.confidence:.3f}<{min_confidence}")
+                            if not aspect_ok:
+                                reasons.append(f"aspect={aspect_ratio:.2f} out of range")
+                            logger.debug(f"Filtered out detection: {', '.join(reasons)}")
                     
-                    if size_ok and conf_ok and aspect_ok:
-                        valid_detections.append(det)
-                    else:
-                        # Log why this detection was filtered out
-                        reasons = []
-                        if not size_ok:
-                            reasons.append(f"size={width}x{height}<{min_face_size}")
-                        if not conf_ok:
-                            reasons.append(f"conf={det.confidence:.3f}<{min_confidence}")
-                        if not aspect_ok:
-                            reasons.append(f"aspect={aspect_ratio:.2f} out of range")
-                        logger.debug(f"Filtered out detection: {', '.join(reasons)}")
+                    if not valid_detections:
+                        # All detected faces failed quality filters (likely false positives)
+                        if detections:
+                            logger.warning(
+                                f"Detected {len(detections)} face(s) but all failed quality filters. "
+                                f"This usually means: (1) Face is too small/far from camera, "
+                                f"(2) Poor image quality/blur, (3) False detections (logos, patterns). "
+                                f"Required: size≥{min_face_size}x{min_face_size}, confidence≥{min_confidence}, aspect ratio {min_aspect_ratio}-{max_aspect_ratio}"
+                            )
+                        else:
+                            logger.debug(f"No faces detected (threshold={self.conf_threshold})")
+                        return None
+                    
+                    # Select largest valid face
+                    largest = max(valid_detections, key=lambda x: x.bbox[2] * x.bbox[3])
+                    
+                    logger.info(f"Face detected: conf={largest.confidence:.3f}, bbox={largest.bbox.tolist()}, size={largest.bbox[2]}x{largest.bbox[3]}")
+                    
+                    # Log if we filtered out smaller detections
+                    if len(valid_detections) < len(detections):
+                        filtered_count = len(detections) - len(valid_detections)
+                        logger.info(f"Filtered out {filtered_count} tiny false positive(s)")
+                    
+                    return largest
                 
-                if not valid_detections:
-                    # All detected faces failed quality filters (likely false positives)
-                    if detections:
-                        logger.warning(
-                            f"Detected {len(detections)} face(s) but all failed quality filters. "
-                            f"This usually means: (1) Face is too small/far from camera, "
-                            f"(2) Poor image quality/blur, (3) False detections (logos, patterns). "
-                            f"Required: size≥{min_face_size}x{min_face_size}, confidence≥{min_confidence}, aspect ratio {min_aspect_ratio}-{max_aspect_ratio}"
-                        )
-                    else:
-                        logger.debug(f"No faces detected (threshold={self.conf_threshold})")
-                    return None
+                # Sort by confidence
+                detections.sort(key=lambda x: x.confidence, reverse=True)
+                return detections[0] if detections else None
                 
-                # Select largest valid face
-                largest = max(valid_detections, key=lambda x: x.bbox[2] * x.bbox[3])
-                
-                logger.info(f"Face detected: conf={largest.confidence:.3f}, bbox={largest.bbox.tolist()}, size={largest.bbox[2]}x{largest.bbox[3]}")
-                
-                # Log if we filtered out smaller detections
-                if len(valid_detections) < len(detections):
-                    filtered_count = len(detections) - len(valid_detections)
-                    logger.info(f"Filtered out {filtered_count} tiny false positive(s)")
-                
-                return largest
-            
-            # Sort by confidence
-            detections.sort(key=lambda x: x.confidence, reverse=True)
-            return detections[0] if detections else None
-            
             except Exception as e:
                 logger.error(f"Face detection failed: {e}")
                 return None
