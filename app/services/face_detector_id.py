@@ -172,11 +172,11 @@ class YuNetFaceDetector:
                     logger.info(f"  Face {i+1}: size={det.bbox[2]}x{det.bbox[3]}, area={face_area}, conf={det.confidence:.3f}, pos=[{det.bbox[0]},{det.bbox[1]}]")
 
                 if return_largest:
-                    # Apply multiple filters to eliminate false positives:
-                    # 1. Minimum size: 50x50 pixels
-                    # 2. Confidence: >= 0.5 (YuNet's default threshold is often too low)
-                    # 3. Aspect ratio: between 0.5 and 2.0 (faces are roughly square)
-                    min_face_size = 50
+                # Apply multiple filters to eliminate false positives:
+                # 1. Minimum size: 40x40 pixels (TEMPORARY: Lowered for testing - revert to 50 for production)
+                # 2. Confidence: >= 0.5 (YuNet's default threshold is often too low)
+                # 3. Aspect ratio: between 0.5 and 2.0 (faces are roughly square)
+                min_face_size = 40
                     min_confidence = 0.5
                     min_aspect_ratio = 0.5
                     max_aspect_ratio = 2.0
