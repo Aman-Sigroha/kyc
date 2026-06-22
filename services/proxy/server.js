@@ -580,22 +580,39 @@ app.post('/v2/enduser/verify/final', async (req, res) => {
 });
 
 // Proxy to Python ML Backend - OCR Extraction
-app.post('/api/v1/kyc/ocr', async (req, res) => {
+app.post('/api/v1/kyc/ocr', upload.fields([
+  { name: 'document', maxCount: 1 }
+]), async (req, res) => {
   try {
     console.log('Forwarding OCR request to Python ML backend...');
-    
+    console.log('Files received:', { document: !!req.files?.document });
+
+    if (!req.files?.document?.[0]) {
+      return res.status(400).json({
+        error: 'Missing required file',
+        details: [{ type: 'missing', loc: ['body', 'document'] }]
+      });
+    }
+
+    const formData = new FormData();
+    formData.append('document', req.files.document[0].buffer, {
+      filename: req.files.document[0].originalname || 'document.jpg',
+      contentType: req.files.document[0].mimetype || 'image/jpeg'
+    });
+
     const response = await axios.post(
-      `${ML_BACKEND_URL}/api/v1/kyc/ocr`,
-      req.body,
+      `${ML_BACKEND_URL}/api/v1/ocr/extract`,
+      formData,
       {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          ...formData.getHeaders(),
         },
         maxBodyLength: Infinity,
-        maxContentLength: Infinity
+        maxContentLength: Infinity,
+        timeout: 60000
       }
     );
-    
+
     res.json(response.data);
   } catch (error) {
     console.error('Error calling Python ML backend for OCR:', error.message);
