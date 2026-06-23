@@ -139,26 +139,48 @@ class YuNetFaceDetector:
             return None
 
         h, w = image.shape[:2]
-        
+
+        # Downscale large images before detection — YuNet struggles on very large images
+        # (e.g. 3024x4032 full-res phone selfies) where the face occupies most of the frame.
+        # Detection is run on the scaled image; bounding boxes are scaled back to original.
+        MAX_DETECT_DIM = 1280
+        scale = 1.0
+        detect_image = image
+        if max(h, w) > MAX_DETECT_DIM:
+            scale = MAX_DETECT_DIM / max(h, w)
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            detect_image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            logger.info(f"Downscaled image for detection: {w}x{h} → {new_w}x{new_h} (scale={scale:.3f})")
+            w, h = new_w, new_h
+
         # Use lock to ensure thread-safe access to detector (prevents OpenCV race conditions)
         with self._lock:
             self._ensure_detector(w, h)
 
             try:
                 # Detect faces
-                _, faces = self.detector.detect(image)
+                _, faces = self.detector.detect(detect_image)
 
                 if faces is None or len(faces) == 0:
                     logger.debug(f"No faces detected (threshold={self.conf_threshold})")
                     return None
 
                 # Parse detections - YuNet format: [x, y, w, h, 5 landmarks (x,y pairs), confidence]
+                # If image was downscaled for detection, scale coordinates back to original size
                 detections = []
                 for face in faces:
-                    bbox = face[:4].astype(np.int32)
-                    landmarks = face[4:14].reshape(5, 2).astype(np.int32)
+                    bbox = face[:4].copy()
+                    landmarks = face[4:14].reshape(5, 2).copy()
                     confidence = float(face[14])
-                    
+
+                    if scale != 1.0:
+                        bbox = (bbox / scale).astype(np.int32)
+                        landmarks = (landmarks / scale).astype(np.int32)
+                    else:
+                        bbox = bbox.astype(np.int32)
+                        landmarks = landmarks.astype(np.int32)
+
                     detections.append(FaceDetectionResult(
                         bbox=bbox,
                         confidence=confidence,
@@ -173,11 +195,11 @@ class YuNetFaceDetector:
 
                 if return_largest:
                     # Apply multiple filters to eliminate false positives:
-                    # 1. Minimum size: 40x40 pixels (TEMPORARY: Lowered for testing - revert to 50 for production)
-                    # 2. Confidence: >= 0.5 (YuNet's default threshold is often too low)
+                    # 1. Minimum size: 30x30 pixels (lowered to handle small ID document photos)
+                    # 2. Confidence: tied to conf_threshold from config (no separate hardcoded value)
                     # 3. Aspect ratio: between 0.5 and 2.0 (faces are roughly square)
-                    min_face_size = 40
-                    min_confidence = 0.5
+                    min_face_size = 30
+                    min_confidence = self.conf_threshold
                     min_aspect_ratio = 0.5
                     max_aspect_ratio = 2.0
                     
@@ -211,7 +233,7 @@ class YuNetFaceDetector:
                                 f"Detected {len(detections)} face(s) but all failed quality filters. "
                                 f"This usually means: (1) Face is too small/far from camera, "
                                 f"(2) Poor image quality/blur, (3) False detections (logos, patterns). "
-                                f"Required: size≥{min_face_size}x{min_face_size}, confidence≥{min_confidence}, aspect ratio {min_aspect_ratio}-{max_aspect_ratio}"
+                                f"Required: size≥{min_face_size}x{min_face_size}, confidence≥{min_confidence:.2f}, aspect ratio {min_aspect_ratio}-{max_aspect_ratio}"
                             )
                         else:
                             logger.debug(f"No faces detected (threshold={self.conf_threshold})")
